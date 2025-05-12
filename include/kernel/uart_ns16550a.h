@@ -1,12 +1,12 @@
 #pragma once
 
-#define UART_NS16550A_BASE ((void*) 0x10000000)
+#define UART_NS16550A_BASE ((void *)0x10000000)
 
 enum UART_NS16550A_Registers {
 	/// Receiver Holding Register
-    	UART_NS16550A_RHR = 0b000,
+	UART_NS16550A_RHR = 0b000,
 	/// Transmitter Holding Register
-    	UART_NS16550A_THR = 0b000,
+	UART_NS16550A_THR = 0b000,
 	/// Interrupt Enable Register
 	UART_NS16550A_IER = 0b001,
 	/// Interrupt Status Register
@@ -31,7 +31,6 @@ enum UART_NS16550A_Registers {
 	UART_NS16550A_PSD = 0b101,
 };
 
-void uart_ns16550a_initialize(void* base);
+void uart_ns16550a_initialize(void *base);
 void uart_ns16550a_putchar(char c);
 char uart_ns16550a_getchar();
-

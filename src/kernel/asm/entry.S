@@ -1,4 +1,4 @@
-.section .init
+.section .text.init
 
 .option norvc
 
@@ -9,7 +9,7 @@ start:
 	
 .option push
 .option norelax
-	la gp, global_pointer
+	la gp, _global_pointer
 .option pop
 
 	# Any hardware threads (hart) that are not bootstrapping need to wait for an IPI
@@ -22,11 +22,11 @@ start:
 	csrw satp, zero
 	
 	/* Setup stack */
-	la sp, stack_top
+	la sp, _stack_start
 	
 	/* Clear the BSS section */
-	la t5, bss_start
-	la t6, bss_end
+	la t5, _bss_start
+	la t6, _bss_end
 bss_clear:
 	sd zero, (t5)
 	addi t5, t5, 8
