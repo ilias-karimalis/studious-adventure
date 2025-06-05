@@ -5,7 +5,7 @@ set(CMAKE_SYSTEM_PROCESSOR riscv64)
 
 # Define compilers
 set(CMAKE_C_COMPILER riscv64-unknown-elf-gcc)
-set(CMAKE_ASM_COMPILER riscv64-unknown-elf-as)
+set(CMAKE_ASM_COMPILER riscv64-unknown-elf-gcc)
 set(CMAKE_LINKER riscv64-unknown-elf-ld)
 
 # Tell CMake not to look for standard libraries

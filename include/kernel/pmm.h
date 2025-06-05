@@ -11,7 +11,7 @@ struct pmmBlock;
 /// @brief  Initializes the physical memory manager.
 errval_t pmm_initialize(struct pmm *pmm, u8 *slab_buf, size_t slab_len);
 /// @brief  Adds a new memory region to the physical memory manager.
-errval_t pmm_add_region(struct pmm *pmm, uintptr_t base, size_t size);
+errval_t pmm_add_region(struct pmm *pmm, void* base, size_t size);
 /// @brief  Allocates a region of memory with the requested size and alignment.
 errval_t pmm_alloc_aligned(struct pmm *pmm, size_t size, size_t alignment, u8 **ret);
 /// @brief  Allocates a region of memory with the requested size and BASE_PAGE_SIZE alignment.
@@ -40,7 +40,7 @@ struct pmmRegion {
 	/// @brief The next region in the list.
 	struct pmmRegion *next;
 	/// @brief  The base address of the region.
-	uintptr_t base;
+	u8* base;
 	/// @brief  Length of the region in bytes.
 	size_t size;
 	/// @brief  Count of total bytes free in this region.

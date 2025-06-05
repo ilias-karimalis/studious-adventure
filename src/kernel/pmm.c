@@ -40,17 +40,18 @@ errval_t pmm_initialize(struct pmm *pmm, u8 *slab_buf, size_t slab_len)
 	return err;
 }
 
-errval_t pmm_add_region(struct pmm *pmm, uintptr_t base, size_t size)
+errval_t pmm_add_region(struct pmm *pmm, void* base, size_t size)
 {
-	if (pmm == NULL || (void *)base == NULL) {
+	if (pmm == NULL || base == NULL) {
 		return ERR_NULL_ARGUMENT;
 	}
+	size_t base_address = (size_t)base;
+
 
 	// Check that the aligned base and size region is at least BASE_PAGE_SIZE
-	uintptr_t aligned_base = ALIGN_UP(base, BASE_PAGE_SIZE);
-	size_t aligned_size =
-		ALIGN_DOWN(size - (aligned_base - base), BASE_PAGE_SIZE);
-	bool ALIGNED_REGION_FITS = aligned_base + aligned_size <= base + size;
+	size_t aligned_base = ALIGN_UP(base_address, BASE_PAGE_SIZE);
+	size_t aligned_size = ALIGN_DOWN(size - (aligned_base - base_address), BASE_PAGE_SIZE);
+	bool ALIGNED_REGION_FITS = aligned_base + aligned_size <= base_address + size;
 	bool NEW_SIZE_NON_ZERO = aligned_size >= BASE_PAGE_SIZE;
 	if (!ALIGNED_REGION_FITS || !NEW_SIZE_NON_ZERO) {
 		return ERR_PMM_ADD_REGION_TOO_SMALL;
@@ -74,7 +75,7 @@ errval_t pmm_add_region(struct pmm *pmm, uintptr_t base, size_t size)
 	// Check if we're already managing this region
 	struct pmmRegion *prev = NULL;
 	struct pmmRegion *cur;
-	for (cur = pmm->regions; cur != NULL && cur->base <= base;
+	for (cur = pmm->regions; cur != NULL && cur->base <= base_address;
 	     prev = cur, cur = cur->next) {
 		bool UP_BOUND = (uintptr_t)aligned_base + aligned_size <=
 				(uintptr_t)cur->base + cur->size;
@@ -102,6 +103,14 @@ errval_t pmm_add_region(struct pmm *pmm, uintptr_t base, size_t size)
 errval_t pmm_alloc(struct pmm* pmm, size_t size, u8 **ret)
 {
 	errval_t err;
+
+	// Check for null arguments
+	if (pmm == NULL || ret == NULL) {
+		return ERR_NULL_ARGUMENT;
+	}
+
+	// Round up the size to the nearest multiple of BASE_PAGE_SIZE
+	size = ALIGN_UP(size, BASE_PAGE_SIZE);
 
 	return ERR_NOT_IMPLEMENTED;
 }
