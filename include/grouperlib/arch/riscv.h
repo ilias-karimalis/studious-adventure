@@ -1,5 +1,6 @@
 #pragma once
 
+
 #define BASE_PAGE_SIZE 4096
 
 extern void *HEAP_START;
@@ -14,3 +15,8 @@ extern void *BSS_START;
 extern void *BSS_END;
 extern void *KERNEL_STACK_START;
 extern void *KERNEL_STACK_END;
+
+[[noreturn]] inline void wfi(void) {
+    asm volatile ("wfi");
+    __builtin_unreachable();
+}

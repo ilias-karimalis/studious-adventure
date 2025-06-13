@@ -18,6 +18,14 @@ enum grouperError {
 	ERR_PMM_SLAB_ALLOC_FAILED,
 	ERR_PMM_ADD_REGION_TOO_SMALL,
 	ERR_PMM_ADD_MANAGED_REGION,
+    ERR_PMM_BAD_ALIGNMENT,
+    ERR_PMM_OUT_OF_MEMORY,
+
+	// Paging errors
+	ERR_PAGING_UNALIGNED_ADDRESS,
+	ERR_PAGING_INVALID_ADDRESS,
+	ERR_PAGING_INVALID_FLAGS,
+	ERR_PAGING_INVALID_TYPE,
 
 	/// @brief  Used to compute the number of enum values in enum grouper_error. Do not use this as an error value.
 	GROUPER_ERROR_GUARD_VALUE,

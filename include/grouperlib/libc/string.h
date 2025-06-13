@@ -6,27 +6,11 @@
 #define NULL 0
 #endif
 
-//typedef typeof(sizeof(0)) size_t;
 
 // String Manipulation
 
 // String Examination
-
-size_t strlen(const char *str)
-{
-	const char *end = str;
-	while (*end != '\0')
-		++end;
-	return end - str;
-}
+size_t strlen(const char *str);
 
 // Character Array Manipulation
-
-void *memset(void *dest, int ch, size_t count)
-{
-	unsigned char *dst = (unsigned char *)dest;
-	for (size_t i = 0; i < count; i++) {
-		dst[i] = (unsigned char)ch;
-	}
-	return dest;
-}
+void *memset(void *dest, int ch, size_t count);

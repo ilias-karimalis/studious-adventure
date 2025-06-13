@@ -19,7 +19,22 @@ static const char *grouper_error_str[] = {
 	[ERR_PMM_ADD_REGION_TOO_SMALL] =
 		"Attempted to add a region to the physical memory manager that was smaller than BASE_PAGE_SIZE.",
 	[ERR_PMM_ADD_MANAGED_REGION] =
-		"Attempted to add a region to the physical memory manager that was already being managed by it."
+		"Attempted to add a region to the physical memory manager that was already being managed by it.",
+    [ERR_PMM_BAD_ALIGNMENT] =
+		"Attempted to allocate memory with an invalid alignment. Alignment must be a power of two and at least BASE_PAGE_SIZE.",
+	[ERR_PMM_OUT_OF_MEMORY] =
+		"Physical memory manager does not have enough free memory to satisfy the allocation request.",
+
+	// Paging errors
+	[ERR_PAGING_UNALIGNED_ADDRESS] =
+		"Attempted to map a page with an unaligned address. Address must be aligned to the page size.",
+	[ERR_PAGING_INVALID_ADDRESS] =
+		"Attempted to map a page with an invalid address. Address must be within the managed physical memory range.",
+	[ERR_PAGING_INVALID_FLAGS] =
+		"Attempted to map a page with invalid flags. Flags must be a combination of valid paging flags.",
+	[ERR_PAGING_INVALID_TYPE] =
+		"Attempted to map a page with an invalid leaf type. Type must be one of the defined page types (Page, MegaPage, GigaPage).",
+
 	// Add new error strings here as needed:
 };
 

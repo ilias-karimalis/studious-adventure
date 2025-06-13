@@ -7,6 +7,12 @@
 struct pmm;
 struct pmmRegion;
 struct pmmBlock;
+enum pmmPolicy {
+	PMM_POLICY_FIRST_FIT,  ///< First fit allocation policy.
+	PMM_POLICY_BEST_FIT,   ///< Best fit allocation policy.
+	PMM_POLICY_WORST_FIT,  ///< Worst fit allocation policy.
+	//PMM_POLICY_NEXT_FIT,   ///< Next fit allocation policy.
+};
 
 /// @brief  Initializes the physical memory manager.
 errval_t pmm_initialize(struct pmm *pmm, u8 *slab_buf, size_t slab_len);
@@ -34,6 +40,8 @@ struct pmm {
 	size_t total;
 	/// @brief  Total amount of free memory managed by the allocator.
 	size_t free;
+	/// @brief  The policy used for allocation.
+	enum pmmPolicy policy;
 };
 
 struct pmmRegion {
@@ -47,6 +55,5 @@ struct pmmRegion {
 	size_t free;
 	/// @brief  Free list of blocks in this region.
 	struct pmmBlock *free_blocks;
-	/// @briref Used list of blocks in this region.
-	struct pmmBlock *used_blocks;
 };
+

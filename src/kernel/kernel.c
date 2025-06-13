@@ -58,11 +58,11 @@ void kmain(void)
 	static u8 pmm_initial_region_slab[INITIAL_PMM_SLAB_SZ];
 	err = pmm_initialize(&pmm, (u8 *)&pmm_initial_region_slab,
 			     INITIAL_PMM_SLAB_SZ);
-	err = pmm_add_region(&pmm, (uintptr_t)HEAP_START, (size_t)HEAP_SIZE);
+	err = pmm_add_region(&pmm, (u8*)HEAP_START, (size_t)HEAP_SIZE);
 	fmtprint("[kmain] pmm initialized with %x bytes of memory.\n",
 		 pmm_total_mem(&pmm));
 	static u8 pmm_extra_region[8192] = {0};
-	err = pmm_add_region(&pmm, (uintptr_t)pmm_extra_region,
+	err = pmm_add_region(&pmm, (u8*)pmm_extra_region,
 			     sizeof(pmm_extra_region));
 	fmtprint("[kmain] pmm initialized with %x bytes of memory.\n",
 		 pmm_total_mem(&pmm));

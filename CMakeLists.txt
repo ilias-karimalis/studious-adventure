@@ -5,6 +5,9 @@ project(riscv_kernel C ASM)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
+# Make sure to generate the compile_commands file
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # Define the linker script
 set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/linker.ld)
 
@@ -37,4 +40,3 @@ add_custom_target(run
         COMMENT "Running in QEMU..."
 )
 
-# Clean target (optional — handled by `make clean`)
