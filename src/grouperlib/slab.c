@@ -1,4 +1,5 @@
 #include <grouperlib/slab.h>
+#include <grouperlib/libc/string.h>
 
 struct slabBlock {
 	struct slabBlock *next;
@@ -74,6 +75,11 @@ void *slab_alloc(struct slabAllocator *slabs)
 	r->blocks = sb->next;
 	r->free--;
 	slabs->free--;
+
+	// Zero out the block before returning it
+#ifdef ZERO_OUT_SLAB_BLOCKS
+	memset(sb, 0, slabs->blocksize);
+#endif
 	return sb;
 }
 

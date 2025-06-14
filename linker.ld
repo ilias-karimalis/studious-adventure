@@ -22,6 +22,7 @@ SECTIONS
 {
 	/* Kernel code */
 	.text : {
+		. = ALIGN(4096);
 		PROVIDE(_text_start = .);
 		*(.text.init) *(.text .text.*)
 		PROVIDE(_text_end = .);
@@ -31,6 +32,7 @@ SECTIONS
 
 	/* Read only data */
 	.rodata : {
+		. = ALIGN(4096);
 		PROVIDE(_rodata_start = .);
 		*(.rodata .rodata.*)
 		PROVIDE(_rodata_end = .);
@@ -44,6 +46,7 @@ SECTIONS
 	} >ram AT>ram :data
 
 	.bss : {
+		. = ALIGN(4096);
 		PROVIDE(_bss_start = .);
 		*(.sbss .sbss.*) *(.bss .bss.*)
 		PROVIDE(_bss_end = .);
@@ -51,10 +54,14 @@ SECTIONS
 
 	PROVIDE(_memory_start = ORIGIN(ram));
 
-	PROVIDE(_stack_start = _bss_end);
-	PROVIDE(_stack_end = _stack_start + 0x8000);
+	. = ALIGN(4096);
+	PROVIDE(_stack_start = .);
+	. = . + 0x8000;
+	PROVIDE(_stack_end = .);
+
 	PROVIDE(_memory_end = ORIGIN(ram) + LENGTH(ram));
 
 	PROVIDE(_heap_start = _stack_end);
+	PROVIDE(_heap_end = _memory_end);
 	PROVIDE(_heap_size = _memory_end - _heap_start);
 }

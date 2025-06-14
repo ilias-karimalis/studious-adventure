@@ -5,44 +5,51 @@
 // Kernel libc includes
 #include <grouperlib/libc/string.h>
 
-struct PrintStream {
-	putchar_func_t putchar;
-	size_t buffer_len;
-	size_t i;
-	char *buffer;
-} ps;
+// struct PrintStream {
+// 	putchar_func_t putchar;
+// 	size_t buffer_len;
+// 	size_t i;
+// 	char *buffer;
+// } ps;
 
-#define StaticMemoryBufferSize 4096
+putchar_func_t putchar_func = NULL;
+
+// #define StaticMemoryBufferSize 4096
 void strlib_initialize(putchar_func_t putchar)
 {
-	static char initial_buffer[StaticMemoryBufferSize];
-	ps = (struct PrintStream){ .putchar = putchar,
-				   .buffer_len = StaticMemoryBufferSize,
-				   .i = 0,
-				   .buffer = initial_buffer };
+	if (putchar == NULL) {
+		return; // No putchar function provided, cannot initialize
+	}
+	putchar_func = putchar;
+	// static char initial_buffer[StaticMemoryBufferSize];
+	// ps = (struct PrintStream){ .putchar = putchar,
+	// 			   .buffer_len = StaticMemoryBufferSize,
+	// 			   .i = 0,
+	// 			   .buffer = initial_buffer };
 }
 
-int strlib_print_stream_buffer()
-{
-	if (ps.buffer == NULL)
-		return 1;
-	size_t str_len = strlen(ps.buffer);
-	for (size_t i = 0; i < str_len; i++) {
-		ps.putchar(ps.buffer[i]);
-	}
-	memset(ps.buffer, 0, ps.buffer_len);
-	ps.i = 0;
-	return 0;
-}
+// int strlib_print_stream_buffer()
+// {
+// 	if (ps.buffer == NULL)
+// 		return 1;
+// 	size_t str_len = strlen(ps.buffer);
+// 	for (size_t i = 0; i < str_len; i++) {
+// 		ps.putchar(ps.buffer[i]);
+// 	}
+// 	memset(ps.buffer, 0, ps.buffer_len);
+// 	ps.i = 0;
+// 	return 0;
+// }
 
 int strlib_push_char_to_stream(char c)
 {
-	ps.buffer[ps.i++] = c;
-	if (ps.i == ps.buffer_len - 2 || c == '\n') {
-		ps.buffer[ps.i] = '\0';
-		return strlib_print_stream_buffer();
-	}
-	return 0;
+	putchar_func(c);
+	// ps.buffer[ps.i++] = c;
+	// if (ps.i == ps.buffer_len - 2 || c == '\n') {
+	// 	ps.buffer[ps.i] = '\0';
+	// 	return strlib_print_stream_buffer();
+	// }
+	// return 0;
 }
 
 int strlib_push_str_to_stream(const char *str)
@@ -51,9 +58,10 @@ int strlib_push_str_to_stream(const char *str)
 	if (str == NULL)
 		return 1;
 	while (*str != '\0') {
-		err = strlib_push_char_to_stream(*str++);
-		if (err != 0)
-			return err;
+		putchar_func(*str++);
+		// err = strlib_push_char_to_stream(*str++);
+		// if (err != 0)
+		// 	return err;
 	}
 	return 0;
 }
@@ -103,7 +111,7 @@ void println(const char *str)
 
 void flush()
 {
-	strlib_print_stream_buffer();
+	// strlib_print_stream_buffer();
 }
 
 size_t base_buffer[256] = { ['d'] = 10, ['x'] = 16, ['o'] = 8, ['b'] = 2 };
@@ -160,7 +168,7 @@ void fmtprint(const char *fmt, ...)
 		// We flush the buffer on a new line.
 		case '\n':
 			strlib_push_char_to_stream(cur);
-			strlib_print_stream_buffer();
+			// strlib_print_stream_buffer();
 			break;
 
 		default:

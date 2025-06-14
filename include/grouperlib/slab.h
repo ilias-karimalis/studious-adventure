@@ -10,6 +10,9 @@
 struct slabAllocator;
 struct slabRegion;
 
+/// If defined, the slab allocator will zero out the memory of allocated blocks.
+#define ZERO_OUT_SLAB_BLOCKS
+
 /// Creates a new allocator with the given block size.
 errval_t slab_init(struct slabAllocator *slabs, size_t blocksize);
 /// Adds the buf region (with length len) to the allocator.

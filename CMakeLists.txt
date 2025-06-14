@@ -40,3 +40,10 @@ add_custom_target(run
         COMMENT "Running in QEMU..."
 )
 
+# Optional: Custom command to run GDB in QEMU
+add_custom_target(gdb
+        COMMAND qemu-system-riscv64 -M virt -cpu rv64 -smp 2 -m 128M -nographic -serial mon:stdio -bios none -kernel ${PROJECT_NAME}.elf -s -S
+        COMMAND gdb-multiarch -ex "target remote :1234" -ex "set architecture riscv:rv64" -ex "set disassembly-flavor intel" ${PROJECT_NAME}.elf
+        DEPENDS ${PROJECT_NAME}.elf
+        COMMENT "Running in QEMU with GDB..."
+)

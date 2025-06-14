@@ -24,6 +24,10 @@ static const char *grouper_error_str[] = {
 		"Attempted to allocate memory with an invalid alignment. Alignment must be a power of two and at least BASE_PAGE_SIZE.",
 	[ERR_PMM_OUT_OF_MEMORY] =
 		"Physical memory manager does not have enough free memory to satisfy the allocation request.",
+	[ERR_PMM_REGION_LIST_EMPTY] =
+		"Physical memory manager region list is empty. No regions are managed.",
+	[ERR_PMM_REGION_LIST_FULL] =
+		"Physical memory manager region list is full. No more regions can be added.",
 
 	// Paging errors
 	[ERR_PAGING_UNALIGNED_ADDRESS] =
@@ -34,6 +38,10 @@ static const char *grouper_error_str[] = {
 		"Attempted to map a page with invalid flags. Flags must be a combination of valid paging flags.",
 	[ERR_PAGING_INVALID_TYPE] =
 		"Attempted to map a page with an invalid leaf type. Type must be one of the defined page types (Page, MegaPage, GigaPage).",
+	[ERR_PAGING_SETUP_TABLE] =
+		"Failed to set up an intermediate page table.",
+	[ERR_PAGING_MAPPING_EXISTS] =
+		"Attempted to map a page that already exists in the page table. Use a different address or unmap the existing mapping first.",
 
 	// Add new error strings here as needed:
 };

@@ -8,48 +8,76 @@
 #include <grouperlib/fmtprint.h>
 #include <grouperlib/libc/string.h>
 
-struct pmmBlock {
-	/// @brief  Pointer to the next free block in the region.
-	struct pmmBlock *next;
-	/// @brief  Size of the block in bytes.
+#define PMM_REGION_COUNT 16
+
+struct pmmRegion {
+	// /// @brief The next region in the list.
+	// struct pmmRegion *next;
+	/// @brief  The base address of the region.
+	paddr_t base;
+	/// @brief  Length of the region in bytes.
 	size_t size;
+	/// @brief  Count of total bytes free in this region.
+	size_t free;
+	/// @brief  Free list of blocks in this region.
+	struct pmmBlock *free_blocks;
 };
 
-errval_t pmm_initialize(struct pmm *pmm, u8 *slab_buf, size_t slab_len)
+struct pmm {
+	/// @brief  List of contiguous regions from which memory can be allocated.
+	struct pmmRegion regions[PMM_REGION_COUNT];
+	/// @brief  Number of regions in the list.
+	size_t region_count;
+	/// @brief  Slab allocator for mmBlock structures.
+	struct slabAllocator block_allocator;
+	/// @brief  Total amount of memory managed by the allocator.
+	size_t total;
+	/// @brief  Total amount of free memory managed by the allocator.
+	size_t free;
+	/// @brief  The policy used for allocation.
+	enum pmmPolicy policy;
+	/// @brief  Check whether the pmm is initialized.
+	bool initialized;
+} pmm;
+
+struct pmmBlock {
+	/// @brief  Base address of the block.
+	paddr_t base;
+	/// @brief  Size of the block in bytes.
+	size_t size;
+	/// @brief  Pointer to the next free block in the region.
+	struct pmmBlock *next;
+};
+SASSERT(sizeof(struct pmmBlock) == 24, "pmmBlock must be 24 bytes wide");
+
+#define INITIAL_PMM_SLAB_SZ SLAB_REGION_SIZE(64, sizeof(struct pmmBlock))
+u8 pmm_initial_region_slab[INITIAL_PMM_SLAB_SZ];
+
+errval_t pmm_initialize(void)
 {
 	errval_t err = err_new();
-	if (pmm == NULL || slab_buf == NULL) {
-		return err_push(err, ERR_NULL_ARGUMENT);
-	}
-
 	// Initialize the slab allocator for the regions
-	if (err_is_fail((err = slab_init(&pmm->region_allocator,
-					 sizeof(struct pmmRegion))))) {
+	if (err_is_fail((err = slab_init(&pmm.block_allocator, sizeof(struct pmmBlock))))) {
 		return err_push(err, ERR_PMM_INIT);
 	}
-
 	// Grow the slab allocator with the provided buffer
-	if (err_is_fail((err = slab_grow(&pmm->region_allocator, slab_buf, slab_len)))) {
+	if (err_is_fail((err = slab_grow(&pmm.block_allocator, pmm_initial_region_slab, INITIAL_PMM_SLAB_SZ)))) {
 		return err_push(err, ERR_PMM_INIT);
 	}
-
 	// Initialize the pmm structure
-	pmm->regions = NULL;
-	pmm->region_count = 0;
-	pmm->total = 0;
-	pmm->free = 0;
-	pmm->policy = PMM_POLICY_FIRST_FIT;
+	pmm.region_count = 0;
+	pmm.total = 0;
+	pmm.free = 0;
+	pmm.policy = PMM_POLICY_FIRST_FIT;
 	return ERR_OK;
 }
 
-errval_t pmm_add_region(struct pmm *pmm, void* base, size_t size)
+errval_t pmm_add_region(void* base, size_t size)
 {
-	if (pmm == NULL || base == NULL) {
+	if (base == NULL) {
 		return ERR_NULL_ARGUMENT;
 	}
 	size_t base_address = (size_t)base;
-
-
 	// Check that the aligned base and size region is at least BASE_PAGE_SIZE
 	size_t aligned_base = ALIGN_UP(base_address, BASE_PAGE_SIZE);
 	size_t aligned_size = ALIGN_DOWN(size - (aligned_base - base_address), BASE_PAGE_SIZE);
@@ -58,52 +86,41 @@ errval_t pmm_add_region(struct pmm *pmm, void* base, size_t size)
 	if (!ALIGNED_REGION_FITS || !NEW_SIZE_NON_ZERO) {
 		return ERR_PMM_ADD_REGION_TOO_SMALL;
 	}
-
-	// Create and instantiate the region struct
-	struct pmmRegion *region =
-		(struct pmmRegion *)slab_alloc(&pmm->region_allocator);
-	if (region == NULL) {
-		return ERR_PMM_SLAB_ALLOC_FAILED;
+	// Check that the region list is not full
+	if (pmm.region_count >= PMM_REGION_COUNT) {
+		return ERR_PMM_REGION_LIST_FULL;
 	}
-	region->next = NULL;
-	region->base = (u8*) aligned_base;
-	region->size = aligned_size;
-	region->free = aligned_size;
-	region->free_blocks = (struct pmmBlock *)aligned_base;
-	region->free_blocks->next = NULL;
-	region->free_blocks->size = aligned_size;
-
 	// Check if we're already managing this region
-	struct pmmRegion *prev = NULL;
-	struct pmmRegion *cur;
-	for (cur = pmm->regions; cur != NULL && (size_t) cur->base <= base_address;
-	     prev = cur, cur = cur->next) {
-		bool UP_BOUND = aligned_base + aligned_size <= (size_t) cur->base + cur->size;
+	for (size_t i = 0; i < pmm.region_count; i++) {
+		struct pmmRegion cur = pmm.regions[i];
+		bool UP_BOUND = aligned_base + aligned_size <= (size_t) cur.base + cur.size;
 		if (UP_BOUND) {
 			return ERR_PMM_ADD_MANAGED_REGION;
 		}
 	}
-
-	// We know that the region is valid and we're adding it to the region list, so we can update the usage statistics.
-	pmm->total += region->size;
-	pmm->free += region->size;
-
-	// The region we want to add should be the first in the region list. Either it's the lowest addressable region, or
-	// it's the first region to be added.
-	if (prev == NULL) {
-		pmm->regions = region;
-		return ERR_OK;
+	// Create and instantiate the region struct
+	struct pmmBlock *free_block = (struct pmmBlock *) slab_alloc(&pmm.block_allocator);
+	if (free_block == NULL) {
+		return ERR_PMM_SLAB_ALLOC_FAILED;
 	}
-
-	prev->next = region;
-	region->next = cur;
+	pmm.regions[pmm.region_count].base = aligned_base;
+	pmm.regions[pmm.region_count].size = aligned_size;
+	pmm.regions[pmm.region_count].free = aligned_size;
+	pmm.regions[pmm.region_count].free_blocks = free_block;
+	free_block->base = aligned_base;
+	free_block->size = aligned_size;
+	free_block->next = NULL;
+	pmm.region_count++;
+	// Update the pmm's usage statistics
+	pmm.total += aligned_size;
+	pmm.free += aligned_size;
 	return ERR_OK;
 }
 
-errval_t pmm_alloc_aligned(struct pmm* pmm, size_t size, size_t alignment, u8** ret)
+errval_t pmm_alloc_aligned(size_t size, size_t alignment, u8** ret)
 {
 	// Check for null arguments
-	if (pmm == NULL || ret == NULL) {
+	if (ret == NULL) {
         *ret = NULL;
 		return ERR_NULL_ARGUMENT;
 	}
@@ -118,7 +135,7 @@ errval_t pmm_alloc_aligned(struct pmm* pmm, size_t size, size_t alignment, u8** 
     size = ALIGN_UP(size, BASE_PAGE_SIZE);
 
     // Check that the allocator has enough memory
-    if (pmm->free < size) {
+    if (pmm.free < size) {
         *ret = NULL;
         return ERR_PMM_OUT_OF_MEMORY;
     }
@@ -127,9 +144,12 @@ errval_t pmm_alloc_aligned(struct pmm* pmm, size_t size, size_t alignment, u8** 
     //
     // For this we probably need paging to work!
     // TODO
+	if (slab_freecount(&pmm.block_allocator) < 16) {
+		TODO("Slab allocator needs to be refilled, but paging is not implemented yet.");
+	}
     
     // Find a large enough region as per our allocation policy:
-    switch (pmm->policy) {
+    switch (pmm.policy) {
         case PMM_POLICY_FIRST_FIT:
             break;
         case PMM_POLICY_BEST_FIT:
@@ -138,20 +158,22 @@ errval_t pmm_alloc_aligned(struct pmm* pmm, size_t size, size_t alignment, u8** 
             return ERR_NOT_IMPLEMENTED;
     }
 
-    ASSERT(pmm->policy == PMM_POLICY_FIRST_FIT, "Starting by implementing only First Fit policy");
-    for (struct pmmRegion* region = pmm->regions; region != NULL; region = region->next)
+    ASSERT(pmm.policy == PMM_POLICY_FIRST_FIT, "Starting by implementing only First Fit policy");
+	for (size_t i = 0; i < pmm.region_count; i++)
+    // for (struct pmmRegion* region = pmm.regions; region != NULL; region = region->next)
     {
+		struct pmmRegion region = pmm.regions[i];
         // Is this regions's free pool big enough for the requuest, if not early exit
-        if (region->free < size) {
+        if (region.free < size) {
             continue;
         }
 
-        struct pmmBlock* block = region->free_blocks;
+        struct pmmBlock* block = region.free_blocks;
         struct pmmBlock* prev = NULL;
         while (block != NULL)
         {
             size_t block_size = block->size;
-            size_t block_base = (size_t) block;
+            size_t block_base = block->base;
 
             size_t aligned_base = ALIGN_UP(block_base, alignment);
             bool SIZE_OK = block_base + block_size >= aligned_base + size;
@@ -164,28 +186,33 @@ errval_t pmm_alloc_aligned(struct pmm* pmm, size_t size, size_t alignment, u8** 
                 if (EXISTS_PRECEEDING && EXISTS_POSTCEEDING) {
                     // Need to make a new block
                     block->size = offset;
-
-                    struct pmmBlock* extra = (struct pmmBlock*) (aligned_base + size);
+					
+                    struct pmmBlock* extra = slab_alloc(&pmm.block_allocator);
+					extra->base = aligned_base + size;
                     extra->size = block_base + block_size - (aligned_base + size);
                     extra->next = block->next;
                     block->next = extra;
                 } else if (EXISTS_PRECEEDING) {
                     block->size = offset;
                 } else if (EXISTS_POSTCEEDING) {
-                    size_t new_base = aligned_base + size;
-                    struct pmmBlock* new_block = (struct pmmBlock*) new_base;
-                    new_block->size = (block_base + block_size) - new_base;
-                    new_block->next = block->next;
-                    prev->next = new_block;
-                } 
+					block->base = aligned_base + size;
+					block->size = block_base + block_size - (aligned_base + size);
+				} else if (prev == NULL) {
+					// This is the first block in the region, so we can just remove it
+					pmm.regions[i].free_blocks = block->next;
+					slab_free(&pmm.block_allocator, block);
+				} else {
+					prev->next = block->next;
+					slab_free(&pmm.block_allocator, block);
+				}
+			
+				pmm.regions[i].free -= size;
+                pmm.free -= size;
+                *ret = (u8*) aligned_base;
 
-                region->free -= size;
-                pmm->free -= size;
-                *ret = (u8*) aligned_base;    
-
-			    // Zero out the page being given out
 #define ZERO_OUT_PMM_PAGE
 #ifdef ZERO_OUT_PMM_PAGE
+			    // Zero out the page being given out
                 memset(*ret, 0, size);
 #endif
                return ERR_OK;
@@ -202,26 +229,23 @@ errval_t pmm_alloc_aligned(struct pmm* pmm, size_t size, size_t alignment, u8** 
 }
 
 
-errval_t pmm_alloc(struct pmm* pmm, size_t size, u8 **ret)
+errval_t pmm_alloc(size_t size, u8 **ret)
 {
-	return pmm_alloc_aligned(pmm, size, BASE_PAGE_SIZE, ret);
+	return pmm_alloc_aligned(size, BASE_PAGE_SIZE, ret);
 }
 
-errval_t pmm_free(struct pmm* pmm, u8* ret)
+errval_t pmm_free(u8* ret)
 {
+	(void) ret;
 	return ERR_NOT_IMPLEMENTED;
 }
 
-size_t pmm_total_mem(struct pmm *pmm)
+size_t pmm_total_mem(void)
 {
-	if (pmm == NULL)
-		return 0;
-	return pmm->total;
+	return pmm.total;
 }
 
-size_t pmm_free_mem(struct pmm *pmm)
+size_t pmm_free_mem(void)
 {
-	if (pmm == NULL)
-		return 0;
-	return pmm->free;
+	return pmm.free;
 }
