@@ -13,7 +13,7 @@ void kernel_id_map_range(sv39_pageTable* root, paddr_t start, paddr_t end, u64 f
 	vaddr_t aligned_start = ALIGN_DOWN(start,  BASE_PAGE_SIZE);
 	vaddr_t aligned_end = ALIGN_UP(end, BASE_PAGE_SIZE);
 	ASSERT(aligned_start < aligned_end, "Start address must be less than end address");
-	fmtprint("[kernel_id_map_range] Mapping range: %x to %x with flags: %x\n", aligned_start, aligned_end, flags);
+	print("[kernel_id_map_range] Mapping range: %x to %x with flags: %x\n", aligned_start, aligned_end, flags);
 
 	for (paddr_t pa = aligned_start; pa < aligned_end; pa += BASE_PAGE_SIZE) {
 		errval_t err = sv39_map(root, pa, pa, flags, sv39_Page);
@@ -51,35 +51,35 @@ size_t kinit(void)
 	print("\tBooting Ilias' toy OS                                  \n");
 	print("=========================================================\n");
 
-	fmtprint("[kinit] uart NS16550A initialized @ %x.\n", UART_NS16550A_BASE);
+	print("[kinit] uart NS16550A initialized @ %x.\n", UART_NS16550A_BASE);
 
-	fmtprint("[kinit] Global Values:\n");
-	fmtprint("\t* Heap Start:               %x\n", HEAP_START);
-	fmtprint("\t* Heap Size:                %x\n", HEAP_SIZE);
-	fmtprint("\t* Text Start:               %x\n", TEXT_START);
-	fmtprint("\t* Text End:                 %x\n", TEXT_END);
-	fmtprint("\t* Data Start:               %x\n", DATA_START);
-	fmtprint("\t* Data End:                 %x\n", DATA_END);
-	fmtprint("\t* RoData Start:             %x\n", RODATA_START);
-	fmtprint("\t* RoData End:               %x\n", RODATA_END);
-	fmtprint("\t* Bss Start:                %x\n", BSS_START);
-	fmtprint("\t* Bss End:                  %x\n", BSS_END);
-	fmtprint("\t* Kernel Stack Start:       %x\n", STACK_START);
-	fmtprint("\t* Kernel Stack End:         %x\n", STACK_END);
+	print("[kinit] Global Values:\n");
+	print("\t* Heap Start:               %x\n", HEAP_START);
+	print("\t* Heap Size:                %x\n", HEAP_SIZE);
+	print("\t* Text Start:               %x\n", TEXT_START);
+	print("\t* Text End:                 %x\n", TEXT_END);
+	print("\t* Data Start:               %x\n", DATA_START);
+	print("\t* Data End:                 %x\n", DATA_END);
+	print("\t* RoData Start:             %x\n", RODATA_START);
+	print("\t* RoData End:               %x\n", RODATA_END);
+	print("\t* Bss Start:                %x\n", BSS_START);
+	print("\t* Bss End:                  %x\n", BSS_END);
+	print("\t* Kernel Stack Start:       %x\n", STACK_START);
+	print("\t* Kernel Stack End:         %x\n", STACK_END);
 
 	// Initialize the physical memory manager
 	err = pmm_initialize();
 	if (err_is_fail(err)) {
-		fmtprint("[kinit] Failed to initialize pmm: %s\n", err_str(err));
+		print("[kinit] Failed to initialize pmm: %s\n", err_str(err));
 		return;
 	}
-	fmtprint("[kinit] Empty pmm initialized.\n");
+	print("[kinit] Empty pmm initialized.\n");
 	err = pmm_add_region((u8*)HEAP_START, (size_t)HEAP_SIZE);
 	if (err_is_fail(err)) {
-		fmtprint("[kinit] Failed to add initial pmm region: %s\n", err_str(err));
+		print("[kinit] Failed to add initial pmm region: %s\n", err_str(err));
 		return;
 	}
-	fmtprint("[kinit] pmm initialized with %x bytes of memory.\n", pmm_total_mem());
+	print("[kinit] pmm initialized with %x bytes of memory.\n", pmm_total_mem());
 
 	// Initialize kernel paging
 	sv39_pageTable* root = sv39_paging_init();
@@ -91,7 +91,7 @@ size_t kinit(void)
 	kernel_id_map_range(root, STACK_START, STACK_END, 	SV39_FLAGS_READ | SV39_FLAGS_WRITE);
 	kernel_id_map_range(root, HEAP_START, HEAP_END, 	SV39_FLAGS_READ | SV39_FLAGS_WRITE);
 	kernel_id_map_range(root, UART_NS16550A_BASE, UART_NS16550A_BASE + BASE_PAGE_SIZE, SV39_FLAGS_READ | SV39_FLAGS_WRITE);
-	fmtprint("[kinit] Kernel paging initialized.\n");
+	print("[kinit] Kernel paging initialized.\n");
 
 	// Assert that identity mappings are correct!
 	for (vaddr_t va = TEXT_START; va < TEXT_END; va += BASE_PAGE_SIZE) {
@@ -129,7 +129,7 @@ size_t kinit(void)
 /// Note: The value of sepc (address of `kmain`) needs to have it's lower to bits be zeroed
 __attribute__((aligned(4))) void kmain(void)
 {
-	fmtprint("[kmain] Paging enabled. Kernel is now running with paging.\n");
+	print("[kmain] Paging enabled. Kernel is now running with paging.\n");
 
 	// Main loop of the kernel
 	while (1) {

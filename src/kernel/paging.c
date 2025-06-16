@@ -116,47 +116,6 @@ errval_t sv39_unmap(sv39_tableEntry* root, vaddr_t va) {
     return ERR_NOT_IMPLEMENTED;
 }
 
-void sv39_print_page_table(sv39_tableEntry* root) {
-    TODO("Implement this function such that it recursively prints out all the subsequent page tables.\n");
-    if (root == NULL) {
-        println("sv39_print_page_table: root is NULL");
-        return;
-    }
-
-    println("SV39 Page Table:");
-    for (int i = 0; i < SV39_TableEntryCount; i++) {
-        sv39_tableEntry entry = root[i];
-        if (SV39_PTE_VALID(entry)) {
-            fmtprint("Entry %d: PPN: %x, Flags: %x\n", i, entry >> 10, entry & 0x3FF);
-        } 
-    }
-}
-
-void sv39_print_table_entry(sv39_tableEntry pte) {
-    uint64_t ppn   = (pte >> 10) & 0xFFFFFFFFFFFULL;  // bits 10–53
-    u64 phys_addr = (ppn << 12);
-    int D = (pte >> 7) & 1;
-    int A = (pte >> 6) & 1;
-    int G = (pte >> 5) & 1;
-    int U = (pte >> 4) & 1;
-    int X = (pte >> 3) & 1;
-    int W = (pte >> 2) & 1;
-    int R = (pte >> 1) & 1;
-    int V = (pte >> 0) & 1;
-
-    fmtprint("SV39 Page Table Entry (raw): %x\n", pte);
-    fmtprint("  Valid     (V): %d\n", V);
-    fmtprint("  Read      (R): %d\n", R);
-    fmtprint("  Write     (W): %d\n", W);
-    fmtprint("  Execute   (X): %d\n", X);
-    fmtprint("  User      (U): %d\n", U);
-    fmtprint("  Global    (G): %d\n", G);
-    fmtprint("  Accessed  (A): %d\n", A);
-    fmtprint("  Dirty     (D): %d\n", D);
-    fmtprint("  PPN          : %x\n", ppn);
-    fmtprint("  Phys Addr.   : %x\n", phys_addr);
-}
-
 OPT(paddr_t) sv39_virt_to_phys(sv39_tableEntry* root, vaddr_t va) {
     vaddr_t vpn[] = {
         (va >> 12) & 0x1FF,
@@ -193,3 +152,45 @@ OPT(paddr_t) sv39_virt_to_phys(sv39_tableEntry* root, vaddr_t va) {
     }
     __builtin_unreachable();
 }
+
+void sv39_print_page_table(sv39_tableEntry* root) {
+    TODO("Implement this function such that it recursively prints out all the subsequent page tables.\n");
+    if (root == NULL) {
+        println("sv39_print_page_table: root is NULL");
+        return;
+    }
+
+    println("SV39 Page Table:");
+    for (int i = 0; i < SV39_TableEntryCount; i++) {
+        sv39_tableEntry entry = root[i];
+        if (SV39_PTE_VALID(entry)) {
+            print("Entry %d: PPN: %x, Flags: %x\n", i, entry >> 10, entry & 0x3FF);
+        } 
+    }
+}
+
+void sv39_print_table_entry(sv39_tableEntry pte) {
+    uint64_t ppn   = (pte >> 10) & 0xFFFFFFFFFFFULL;  // bits 10–53
+    u64 phys_addr = (ppn << 12);
+    int D = (pte >> 7) & 1;
+    int A = (pte >> 6) & 1;
+    int G = (pte >> 5) & 1;
+    int U = (pte >> 4) & 1;
+    int X = (pte >> 3) & 1;
+    int W = (pte >> 2) & 1;
+    int R = (pte >> 1) & 1;
+    int V = (pte >> 0) & 1;
+
+    print("SV39 Page Table Entry (raw): %x\n", pte);
+    print("  Valid     (V): %d\n", V);
+    print("  Read      (R): %d\n", R);
+    print("  Write     (W): %d\n", W);
+    print("  Execute   (X): %d\n", X);
+    print("  User      (U): %d\n", U);
+    print("  Global    (G): %d\n", G);
+    print("  Accessed  (A): %d\n", A);
+    print("  Dirty     (D): %d\n", D);
+    print("  PPN          : %x\n", ppn);
+    print("  Phys Addr.   : %x\n", phys_addr);
+}
+

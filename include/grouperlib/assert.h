@@ -5,16 +5,14 @@
 #define ASSERT(expr, msg, ...)                          \
     do {                                                \
         if (!(expr)) {                                  \
-            fmtprint(msg __VA_OPT__(,) __VA_ARGS__);    \
-            flush();                                    \
+            print(msg __VA_OPT__(,) __VA_ARGS__);       \
             for (;;) { }                                \
         }                                               \
     } while (0)
 
-#define TODO(msg, ...)                            \
-    do {                                                \
-        fmtprint("TODO: " msg __VA_OPT__(,) __VA_ARGS__); \
-        flush();                                        \
-        for (;;) { }                                    \
+#define TODO(msg, ...)                                      \
+    do {                                                    \
+        print("TODO: " msg __VA_OPT__(,) __VA_ARGS__);      \
+        for (;;) { }                                        \
     } while (0)
 
