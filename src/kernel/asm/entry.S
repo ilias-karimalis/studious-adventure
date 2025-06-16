@@ -149,6 +149,13 @@ start:
 	csrw	stvec, t3
 	# kinit() is required to return back the SATP value (including MODE) via a0
 	csrw	satp, a0
+
+	# Setup pmp to map the whole physical address space
+	li t0, 0          
+	csrw pmpaddr0, t0     
+	li t0, 0x0F           # Load 0x0F (7 | (1 << 3)) into t0 => RWX + A_TOR
+	csrw pmpcfg0, t0
+
 	# Force the CPU to take our SATP register.
 	# To be efficient, if the address space identifier (ASID) portion of SATP is already
 	# in cache, it will just grab whatever's in cache. However, that means if we've updated

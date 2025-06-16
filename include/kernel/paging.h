@@ -2,6 +2,7 @@
 
 #include <grouperlib/numeric_types.h>
 #include <grouperlib/error.h>
+#include <grouperlib/option.h>
 #include <grouperlib/assert.h>
 #include <kernel/pmm.h>
 
@@ -12,6 +13,8 @@
 
 #define SV39_TableEntryCount 512
 #define SV39_Kernel_VA_Base 0xFFFFFFF800000000
+
+DEFINE_OPTION_TYPE(paddr_t);
 
 typedef u64 sv39_tableEntry;
 typedef sv39_tableEntry sv39_pageTable[SV39_TableEntryCount];
@@ -47,6 +50,9 @@ sv39_tableEntry* sv39_paging_init();
 errval_t sv39_map(sv39_tableEntry* root, vaddr_t va, paddr_t pa, u64 flags, enum sv39_pageType type);
 /// Unmaps a page from the virtual address space, given a root page table.
 errval_t sv39_unmap(sv39_tableEntry* root, vaddr_t va);
+/// Walks the paage table translating a va to a pa if the mapping is present.
+OPT(paddr_t) sv39_virt_to_phys(sv39_tableEntry* root, vaddr_t va);
 
 /// Prints the contents of the page table for debugging purposes.
 void sv39_print_page_table(sv39_tableEntry* root);
+void sv39_print_table_entry(sv39_tableEntry pte);

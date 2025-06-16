@@ -93,11 +93,41 @@ size_t kinit(void)
 	kernel_id_map_range(root, UART_NS16550A_BASE, UART_NS16550A_BASE + BASE_PAGE_SIZE, SV39_FLAGS_READ | SV39_FLAGS_WRITE);
 	fmtprint("[kinit] Kernel paging initialized.\n");
 
+	// Assert that identity mappings are correct!
+	for (vaddr_t va = TEXT_START; va < TEXT_END; va += BASE_PAGE_SIZE) {
+		OPT(paddr_t) pa = sv39_virt_to_phys(root, va);
+		ASSERT(OPT_EQ(pa, va), "Identity mapping failed, mapping valid: %d, va: %x, pa: %x\n", pa.some, va, pa.val);
+	}
+	for (vaddr_t va = RODATA_START; va < RODATA_END; va += BASE_PAGE_SIZE) {
+		OPT(paddr_t) pa = sv39_virt_to_phys(root, va);
+		ASSERT(OPT_EQ(pa, va), "RODATA: Identity mapping failed, mapping valid: %d, va: %lx, pa: %lx\n", pa.some, va, pa.val);
+	}
+	for (vaddr_t va = DATA_START; va < DATA_END; va += BASE_PAGE_SIZE) {
+		OPT(paddr_t) pa = sv39_virt_to_phys(root, va);
+		ASSERT(OPT_EQ(pa, va), "DATA: Identity mapping failed, mapping valid: %d, va: %lx, pa: %lx\n", pa.some, va, pa.val);
+	}
+	for (vaddr_t va = BSS_START; va < BSS_END; va += BASE_PAGE_SIZE) {
+		OPT(paddr_t) pa = sv39_virt_to_phys(root, va);
+		ASSERT(OPT_EQ(pa, va), "BSS: Identity mapping failed, mapping valid: %d, va: %lx, pa: %lx\n", pa.some, va, pa.val);
+	}
+	for (vaddr_t va = STACK_START; va < STACK_END; va += BASE_PAGE_SIZE) {
+		OPT(paddr_t) pa = sv39_virt_to_phys(root, va);
+		ASSERT(OPT_EQ(pa, va), "STACK: Identity mapping failed, mapping valid: %d, va: %lx, pa: %lx\n", pa.some, va, pa.val);
+	}
+	for (vaddr_t va = HEAP_START; va < HEAP_END; va += BASE_PAGE_SIZE) {
+		OPT(paddr_t) pa = sv39_virt_to_phys(root, va);
+		ASSERT(OPT_EQ(pa, va), "HEAP: Identity mapping failed, mapping valid: %d, va: %lx, pa: %lx\n", pa.some, va, pa.val);
+	}
+	for (vaddr_t va = UART_NS16550A_BASE; va < UART_NS16550A_BASE + BASE_PAGE_SIZE; va += BASE_PAGE_SIZE) {
+		OPT(paddr_t) pa = sv39_virt_to_phys(root, va);
+		ASSERT(OPT_EQ(pa, va), "UART: Identity mapping failed, mapping valid: %d, va: %lx, pa: %lx\n", pa.some, va, pa.val);
+	}
 	// Returns the value to write to the SATP register 
 	return  SATP_MODE_SV39_FLAG | SATP_PPN_MASK(root);
 }
 
-void kmain(void)
+/// Note: The value of sepc (address of `kmain`) needs to have it's lower to bits be zeroed
+__attribute__((aligned(4))) void kmain(void)
 {
 	fmtprint("[kmain] Paging enabled. Kernel is now running with paging.\n");
 
