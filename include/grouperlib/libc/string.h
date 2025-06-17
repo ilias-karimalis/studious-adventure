@@ -6,7 +6,6 @@
 #define NULL 0
 #endif
 
-
 // String Manipulation
 
 // String Examination

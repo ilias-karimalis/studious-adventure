@@ -27,11 +27,9 @@ size_t slab_freecount(struct slabAllocator *slabs);
 // Size of block header
 #define SLAB_HEADER_SIZE (sizeof(void *))
 // The size of a block must be at least as big as the header size
-#define SLAB_BLOCKSIZE(blocksize) \
-	(((blocksize) > SLAB_HEADER_SIZE) ? (blocksize) : SLAB_HEADER_SIZE)
+#define SLAB_BLOCKSIZE(blocksize) (((blocksize) > SLAB_HEADER_SIZE) ? (blocksize) : SLAB_HEADER_SIZE)
 // Macro to compute the static buffer size required to fit a Slab Region with n elements
-#define SLAB_REGION_SIZE(n, blocksize) \
-	((n)*SLAB_BLOCKSIZE(blocksize) + sizeof(struct slabRegion))
+#define SLAB_REGION_SIZE(n, blocksize) ((n) * SLAB_BLOCKSIZE(blocksize) + sizeof(struct slabRegion))
 
 struct slabAllocator {
 	/// Size of blocks managed by this allocator

@@ -7,27 +7,22 @@ static const char *grouper_error_str[] = {
 	[ERR_NULL_ARGUMENT] = "Pointer argument to function was NULL.",
 
 	// Slab allocator errors:
-	[ERR_SLAB_REGION_TOO_SMALL] =
-		"Slab region is too small to allocate a block from.",
-	[ERR_SLAB_FOREIGN_BLOCK] =
-		"Slab block being returned is not managed by this allocator.",
+	[ERR_SLAB_REGION_TOO_SMALL] = "Slab region is too small to allocate a block from.",
+	[ERR_SLAB_FOREIGN_BLOCK] = "Slab block being returned is not managed by this allocator.",
 
 	// Physical memory manager errors:
 	[ERR_PMM_INIT] = "Physical memory manager initialization failed.",
-	[ERR_PMM_SLAB_ALLOC_FAILED] =
-		"Physical memory manager slab allocator failed to allocate a block.",
+	[ERR_PMM_SLAB_ALLOC_FAILED] = "Physical memory manager slab allocator failed to allocate a block.",
 	[ERR_PMM_ADD_REGION_TOO_SMALL] =
 		"Attempted to add a region to the physical memory manager that was smaller than BASE_PAGE_SIZE.",
 	[ERR_PMM_ADD_MANAGED_REGION] =
 		"Attempted to add a region to the physical memory manager that was already being managed by it.",
-    [ERR_PMM_BAD_ALIGNMENT] =
+	[ERR_PMM_BAD_ALIGNMENT] =
 		"Attempted to allocate memory with an invalid alignment. Alignment must be a power of two and at least BASE_PAGE_SIZE.",
 	[ERR_PMM_OUT_OF_MEMORY] =
 		"Physical memory manager does not have enough free memory to satisfy the allocation request.",
-	[ERR_PMM_REGION_LIST_EMPTY] =
-		"Physical memory manager region list is empty. No regions are managed.",
-	[ERR_PMM_REGION_LIST_FULL] =
-		"Physical memory manager region list is full. No more regions can be added.",
+	[ERR_PMM_REGION_LIST_EMPTY] = "Physical memory manager region list is empty. No regions are managed.",
+	[ERR_PMM_REGION_LIST_FULL] = "Physical memory manager region list is full. No more regions can be added.",
 
 	// Paging errors
 	[ERR_PAGING_UNALIGNED_ADDRESS] =
@@ -38,8 +33,7 @@ static const char *grouper_error_str[] = {
 		"Attempted to map a page with invalid flags. Flags must be a combination of valid paging flags.",
 	[ERR_PAGING_INVALID_TYPE] =
 		"Attempted to map a page with an invalid leaf type. Type must be one of the defined page types (Page, MegaPage, GigaPage).",
-	[ERR_PAGING_SETUP_TABLE] =
-		"Failed to set up an intermediate page table.",
+	[ERR_PAGING_SETUP_TABLE] = "Failed to set up an intermediate page table.",
 	[ERR_PAGING_MAPPING_EXISTS] =
 		"Attempted to map a page that already exists in the page table. Use a different address or unmap the existing mapping first.",
 
@@ -47,8 +41,7 @@ static const char *grouper_error_str[] = {
 };
 
 SASSERT(sizeof(enum grouperError) == 1, "enum grouperError must fit in a u8");
-SASSERT(sizeof(grouper_error_str) / sizeof(grouper_error_str[0]) ==
-		GROUPER_ERROR_GUARD_VALUE,
+SASSERT(sizeof(grouper_error_str) / sizeof(grouper_error_str[0]) == GROUPER_ERROR_GUARD_VALUE,
 	"grouper_error_str must match the number of errors in enum grouper_error");
 
 inline errval_t err_new(void)

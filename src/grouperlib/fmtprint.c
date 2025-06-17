@@ -7,8 +7,7 @@
 
 putchar_func_t putchar_func = NULL;
 
-void 
-strlib_initialize(putchar_func_t putchar)
+void strlib_initialize(putchar_func_t putchar)
 {
 	if (putchar == NULL) {
 		return;
@@ -16,19 +15,18 @@ strlib_initialize(putchar_func_t putchar)
 	putchar_func = putchar;
 }
 
-void 
-strlib_print_str(const char* str)
+void strlib_print_str(const char *str)
 {
-	if (str == NULL) return;
+	if (str == NULL)
+		return;
 	while (*str != '\0') {
 		putchar_func(*str++);
 	}
 }
 
-void 
-strlib_print_int(size_t val, size_t base)
+void strlib_print_int(size_t val, size_t base)
 {
-	#define MAX_INT_BUF_SIZE 67
+#define MAX_INT_BUF_SIZE 67
 	static char buf[MAX_INT_BUF_SIZE] = { 0 };
 	size_t i = MAX_INT_BUF_SIZE - 2;
 	while (val && i) {
@@ -57,8 +55,7 @@ strlib_print_int(size_t val, size_t base)
 }
 
 // Public facing printing functions
-void 
-println(const char *fmt, ...)
+void println(const char *fmt, ...)
 {
 	va_list args;
 	va_start(args, fmt);
@@ -68,8 +65,7 @@ println(const char *fmt, ...)
 }
 
 size_t base_buffer[256] = { ['d'] = 10, ['x'] = 16, ['o'] = 8, ['b'] = 2 };
-void 
-print(const char *fmt, ...)
+void print(const char *fmt, ...)
 {
 	va_list args;
 	va_start(args, fmt);

@@ -1,6 +1,5 @@
 #include <grouperlib/libc/string.h>
 
-
 // String Manipulation
 
 // String Examination

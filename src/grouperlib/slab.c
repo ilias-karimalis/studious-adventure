@@ -98,9 +98,7 @@ errval_t slab_free(struct slabAllocator *slabs, void *block)
 		// Check if the block falls inside this slab
 		bool LOWER_BOUND = (uintptr_t)region < (uintptr_t)sb;
 		bool UPPER_BOUND = (uintptr_t)sb <
-				   (uintptr_t)region +
-					   sizeof(struct slabRegion) +
-					   region->total * slabs->blocksize;
+				   (uintptr_t)region + sizeof(struct slabRegion) + region->total * slabs->blocksize;
 		if (LOWER_BOUND && UPPER_BOUND)
 			break;
 	}

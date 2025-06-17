@@ -3,16 +3,16 @@
 
 #include <stdbool.h>
 
-/// Defines 
+/// Defines
 #define OPT(t) Option_##t
 
-#define DEFINE_OPTION_TYPE(t)               \
-    typedef struct {                        \
-        bool some;                          \
-        t    val;                           \
-    }  OPT(t)
+#define DEFINE_OPTION_TYPE(t) \
+	typedef struct {      \
+		bool some;    \
+		t val;        \
+	} OPT(t)
 
-#define OPT_SOME(t, value) ((OPT(t)) { .some = true, .val = value })
-#define OPT_NONE(t) ((OPT(t)) { .some = false })
+#define OPT_SOME(t, value) ((OPT(t)){ .some = true, .val = value })
+#define OPT_NONE(t) ((OPT(t)){ .some = false })
 
 #define OPT_EQ(opt, value) ((opt).some && (opt).val == (value))
