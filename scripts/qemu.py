@@ -11,15 +11,16 @@ import time
 QEMU_BINARY = "qemu-system-riscv64"
 GDB_BINARY = "gdb-multiarch"
 
+
 def main():
     parser = argparse.ArgumentParser(description="Runs QEMU with a given riscv64 kernel on the virt machine.")
-    # parser.add_argument("--qemu", default=QEMU_BINARY, help="Path to the QEMU binary.")
     parser.add_argument("--kernel-elf", required=True, help="Path to the kernel ELF file.")
-    parser.add_argument("--gdb", default=False, action=argparse.BooleanOptionalAction, help="Runs QEMU in the background and launches GDB for debugging.")
+    parser.add_argument("--gdb", default=False, action=argparse.BooleanOptionalAction,
+                        help="Runs QEMU in the background and launches GDB for debugging.")
     args = parser.parse_args()
 
     qemu_args = [
-        QEMU_BINARY, # This will be argv[0] for the new process
+        QEMU_BINARY,
         "-M", "virt",
         "-cpu", "rv64",
         "-smp", "2",
@@ -36,8 +37,6 @@ def main():
         print("QEMU Arguments: ", ' '.join(qemu_args[1:]))
         try:
             os.execvp(qemu_args[0], qemu_args)
-            print("Error: os.execvp failed to execute QEMU.")
-            sys.exit(1)
         except OSError as e:
             print(f"Error launching QEMU: {e}")
             sys.exit(1)
@@ -63,21 +62,19 @@ def main():
             args.kernel_elf,
             "-ex", "set architecture riscv:rv64",
             "-ex", "target remote localhost:1234",
-            # "-ex", "file {}".format(args.kernel_elf),
-            # "-ex", "layout asm",
-            # "-ex", "layout regs",
+            "-ex", "layout asm",
+            "-ex", "layout regs",
         ]
         print("Preparing to launch GDB.")
         print("GDB Command: ", ' '.join(gdb_commands))
         try:
             os.execvp(gdb_commands[0], gdb_commands)
-            print("Error: os.execvp failed to execute GDB.")
-            sys.exit(1)
         except OSError as e:
             print(f"Error launching GDB: {e}")
             qemu_process.terminate()
             qemu_process.wait()
             sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
