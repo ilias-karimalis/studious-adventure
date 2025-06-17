@@ -1,6 +1,8 @@
 #pragma once
 
-#define UART_NS16550A_BASE ((void *)0x10000000)
+#include <grouperlib/numeric_types.h>
+
+#define UART_NS16550A_BASE ((size_t) 0x10000000)
 
 enum UART_NS16550A_Registers {
 	/// Receiver Holding Register
@@ -31,6 +33,6 @@ enum UART_NS16550A_Registers {
 	UART_NS16550A_PSD = 0b101,
 };
 
-void uart_ns16550a_initialize(void *base);
+void uart_ns16550a_initialize(size_t base);
 void uart_ns16550a_putchar(char c);
 char uart_ns16550a_getchar();

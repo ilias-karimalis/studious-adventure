@@ -3,10 +3,10 @@
 
 static volatile u8 *uart_base = 0x0;
 
-void uart_ns16550a_initialize(void *base)
+void uart_ns16550a_initialize(size_t base)
 {
 	// Currently we're not really using the full 16550 and are not enabling
-	// any of the options.Instead, we're simply polling for get/put.
+	// any of the options. Instead, we're simply polling for get/put.
 	uart_base = (volatile u8 *)base;
 }
 

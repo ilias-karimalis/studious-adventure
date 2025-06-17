@@ -8,7 +8,7 @@
 #include <grouperlib/bitmacros.h>
 
 /// ID maps a range of virtual addresses to physical addresses in the kernel's page table.
-void kernel_id_map_range(sv39_tableEntry *root, paddr_t start, paddr_t end, u64 flags)
+void kernel_id_map_range(sv39_pageTable *root, paddr_t start, paddr_t end, u64 flags)
 {
 	vaddr_t aligned_start = ALIGN_DOWN(start, BASE_PAGE_SIZE);
 	vaddr_t aligned_end = ALIGN_UP(end, BASE_PAGE_SIZE);
@@ -70,19 +70,17 @@ size_t kinit(void)
 	// Initialize the physical memory manager
 	err = pmm_initialize();
 	if (err_is_fail(err)) {
-		print("[kinit] Failed to initialize pmm: %s\n", err_str(err));
-		return;
+		PANIC_LOOP("[kinit] Failed to initialize pmm: %s\n", err_str(err));
 	}
 	print("[kinit] Empty pmm initialized.\n");
 	err = pmm_add_region((u8 *)HEAP_START, (size_t)HEAP_SIZE);
 	if (err_is_fail(err)) {
-		print("[kinit] Failed to add initial pmm region: %s\n", err_str(err));
-		return;
+		PANIC_LOOP("[kinit] Failed to add initial pmm region: %s\n", err_str(err));
 	}
 	print("[kinit] pmm initialized with %x bytes of memory.\n", pmm_total_mem());
 
 	// Initialize kernel paging
-	sv39_pageTable *root = sv39_paging_init();
+	sv39_pageTable *root = (sv39_pageTable*) sv39_paging_init();
 	// Setting up kernel identity mappings
 	kernel_id_map_range(root, TEXT_START, TEXT_END, SV39_FLAGS_READ | SV39_FLAGS_EXECUTE);
 	kernel_id_map_range(root, RODATA_START, RODATA_END, SV39_FLAGS_READ);

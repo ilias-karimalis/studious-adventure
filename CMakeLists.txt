@@ -25,7 +25,7 @@ target_include_directories(${PROJECT_NAME}.elf PRIVATE ${CMAKE_SOURCE_DIR}/inclu
 
 # Compiler flags
 target_compile_options(${PROJECT_NAME}.elf PRIVATE
-        -Wall -Wextra -mcmodel=medany -ffreestanding -nostdlib -fno-exceptions
+        -Wall -Wextra -Werror -mcmodel=medany -ffreestanding -nostdlib -fno-exceptions
 )
 
 # Linker flags

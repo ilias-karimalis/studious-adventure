@@ -17,3 +17,11 @@
 		for (;;) {                                      \
 		}                                               \
 	} while (0)
+
+#define PANIC_LOOP(msg, ...)                                            \
+	do {                                                            \
+		print("KERNEL PANIC: " msg __VA_OPT__(, ) __VA_ARGS__); \
+		for (;;) {                                              \
+		}                                                       \
+	} while (0)
+

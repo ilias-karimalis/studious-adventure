@@ -23,10 +23,10 @@ const u64 sv39_pageSizes[] = {
 /// The root page table for the kernel, initialized to zero.
 alignas(0x1000) sv39_tableEntry kernel_root[SV39_TableEntryCount] = { 0 };
 
-sv39_tableEntry *sv39_paging_init()
+sv39_pageTable *sv39_paging_init()
 {
 	ASSERT(kernel_root[0] == 0, "root page table is not 0 initialized");
-	return (sv39_tableEntry *)&kernel_root;
+	return &kernel_root;
 }
 
 // Forward declarations of internal functions
@@ -34,19 +34,20 @@ errval_t sv39_map_small_page(sv39_tableEntry *root, vaddr_t va, paddr_t pa, u64 
 errval_t sv39_map_mega_page(sv39_tableEntry *root, vaddr_t va, paddr_t pa, u64 flags);
 errval_t sv39_map_giga_page(sv39_tableEntry *root, vaddr_t va, paddr_t pa, u64 flags);
 
-errval_t sv39_map(sv39_tableEntry *root, vaddr_t va, paddr_t pa, u64 flags, enum sv39_pageType type)
+errval_t sv39_map(sv39_pageTable *root, vaddr_t va, paddr_t pa, u64 flags, enum sv39_pageType type)
 {
 	if (root == NULL) {
 		return ERR_NULL_ARGUMENT;
 	}
+	sv39_tableEntry* table = (sv39_tableEntry *) root;
 
 	switch (type) {
 	case sv39_Page:
-		return sv39_map_small_page(root, va, pa, flags);
+		return sv39_map_small_page(table, va, pa, flags);
 	case sv39_MegaPage:
-		return sv39_map_mega_page(root, va, pa, flags);
+		return sv39_map_mega_page(table, va, pa, flags);
 	case sv39_GigaPage:
-		return sv39_map_giga_page(root, va, pa, flags);
+		return sv39_map_giga_page(table, va, pa, flags);
 	default:
 		return ERR_PAGING_INVALID_TYPE;
 	}
@@ -119,12 +120,14 @@ errval_t sv39_map_giga_page(sv39_tableEntry *root, vaddr_t va, paddr_t pa, u64 f
 	return ERR_NOT_IMPLEMENTED;
 }
 
-errval_t sv39_unmap(sv39_tableEntry *root, vaddr_t va)
+errval_t sv39_unmap(sv39_pageTable *root, vaddr_t va)
 {
+	(void)root;
+	(void)va;
 	return ERR_NOT_IMPLEMENTED;
 }
 
-OPT(paddr_t) sv39_virt_to_phys(sv39_tableEntry *root, vaddr_t va)
+OPT(paddr_t) sv39_virt_to_phys(sv39_pageTable *root, vaddr_t va)
 {
 	vaddr_t vpn[] = {
 		(va >> 12) & 0x1FF,
@@ -133,7 +136,7 @@ OPT(paddr_t) sv39_virt_to_phys(sv39_tableEntry *root, vaddr_t va)
 	};
 	paddr_t page_offset = va & (sv39_pageSizes[sv39_Page]);
 
-	sv39_tableEntry *table = root;
+	sv39_tableEntry *table = (sv39_tableEntry *) root;
 	for (int level = 2; level >= 0; level--) {
 		sv39_tableEntry pte = table[vpn[level]];
 		// Fail if we hit an invalid pte

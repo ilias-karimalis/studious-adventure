@@ -44,13 +44,13 @@ SASSERT(sizeof(enum sv39_tableEntryFlags) == sizeof(sv39_tableEntry),
 	"sv39_tableEntryFlags must be the same size as sv39_tableEntry");
 
 /// Initializes the SV39 paging system and returns a pointer to the root page table.
-sv39_tableEntry *sv39_paging_init();
+sv39_pageTable *sv39_paging_init();
 /// Maps a page into the virtual address space, given a root page table. If any level of the page table does not exist, it is created.
-errval_t sv39_map(sv39_tableEntry *root, vaddr_t va, paddr_t pa, u64 flags, enum sv39_pageType type);
+errval_t sv39_map(sv39_pageTable *root, vaddr_t va, paddr_t pa, u64 flags, enum sv39_pageType type);
 /// Unmaps a page from the virtual address space, given a root page table.
-errval_t sv39_unmap(sv39_tableEntry *root, vaddr_t va);
+errval_t sv39_unmap(sv39_pageTable *root, vaddr_t va);
 /// Walks the page table translating a va to a pa if the mapping is present.
-OPT(paddr_t) sv39_virt_to_phys(sv39_tableEntry *root, vaddr_t va);
+OPT(paddr_t) sv39_virt_to_phys(sv39_pageTable *root, vaddr_t va);
 
 /// Prints the contents of the page table for debugging purposes.
 void sv39_print_page_table(sv39_tableEntry *root);
