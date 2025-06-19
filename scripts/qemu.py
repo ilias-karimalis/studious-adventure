@@ -24,7 +24,7 @@ def main():
         "-M", "virt",
         "-cpu", "rv64",
         "-smp", "2",
-        "-m", "128M",
+        "-m", "4G",
         "-nographic",
         "-serial", "mon:stdio",
         "-bios", "none",
@@ -41,22 +41,11 @@ def main():
             print(f"Error launching QEMU: {e}")
             sys.exit(1)
     else:
+        print("GDB Script is not working, currently just prints out the two commands to run.")
         # Add flags for QEMU to wait for GDB
         qemu_args += ["-s", "-S"]  # -s = -gdb tcp::1234, -S = freeze CPU at startup
+        print(' '.join(qemu_args))
 
-        print("Launching QEMU in the background for GDB debugging...")
-        print("QEMU Command: ", ' '.join(qemu_args))
-        try:
-            now = time.time()
-            qemu_stdout = open(f"qemu_stdout_{now}.log", "w")
-            qemu_stderr = open(f"qemu_stderr_{now}.log", "w")
-            qemu_process = subprocess.Popen(qemu_args, stdout=qemu_stdout, stderr=qemu_stderr, text=True)
-        except Exception as e:
-            print(f"Failed to start QEMU: {e}")
-            sys.exit(1)
-
-        # Allow some time for QEMU to start and listen on port 1234
-        time.sleep(1)
         gdb_commands = [
             GDB_BINARY,
             args.kernel_elf,
@@ -65,15 +54,7 @@ def main():
             "-ex", "layout asm",
             "-ex", "layout regs",
         ]
-        print("Preparing to launch GDB.")
-        print("GDB Command: ", ' '.join(gdb_commands))
-        try:
-            os.execvp(gdb_commands[0], gdb_commands)
-        except OSError as e:
-            print(f"Error launching GDB: {e}")
-            qemu_process.terminate()
-            qemu_process.wait()
-            sys.exit(1)
+        print(' '.join(gdb_commands))
 
 
 if __name__ == "__main__":
