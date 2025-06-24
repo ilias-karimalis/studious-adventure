@@ -29,7 +29,7 @@ struct dtb_header {
 
 size_t dtb_parse_node(struct dtNode **curr, u8 *structures, size_t off);
 size_t dtb_parse_property(struct dtNode *curr, u8 *structures, u8 *strings, size_t off);
-errval_t dtb_recursive_property_rewrite(struct dtNode *node, u32 address_cells, u32 size_cells);
+errval_t dtb_recursive_property_rewrite(struct dtNode *node);
 void dtb_print_tree(void);
 
 errval_t dt_parse(paddr_t dtb_base_addr)
@@ -140,7 +140,9 @@ dtb_second_pass:
 	state.root = &state.nodes.data[0];
 
 	// Now that we have parsed the device tree, we can rewrite properties as needed.
-	err = dtb_recursive_property_rewrite(state.root, 2, 1);
+	state.root->address_cells = 2;
+	state.root->size_cells = 1;
+	err = dtb_recursive_property_rewrite(state.root);
 	if (err_is_fail(err))
 		return err_push(err, ERR_DTB_REWRITE_FAILED);
 
@@ -302,19 +304,89 @@ void dtb_rewrite_property_reg(struct dtProperty *prop, u32 address_cells, u32 si
 	}
 
 	prop->type = DTB_PROP_REG;
-	prop->data.reg.address_cells = address_cells;
-	prop->data.reg.size_cells = size_cells;
+	// prop->data.reg.address_cells = address_cells;
+	// prop->data.reg.size_cells = size_cells;
 	prop->data.reg.n_pairs = n_pairs;
 	prop->data.reg.addresses = addresses;
 	prop->data.reg.sizes = sizes;
 }
 
-errval_t dtb_recursive_property_rewrite(struct dtNode *node, u32 address_cells, u32 size_cells)
+void dtb_rewrite_property_ranges(struct dtProperty *prop, u32 address_cells, u32 size_cells)
+{
+	void *value = prop->data.raw.value;
+	u32 value_len = prop->data.raw.value_len;
+	u32 address_size = sizeof(u32) * address_cells;
+	u32 size_size = sizeof(u32) * size_cells;
+
+	assert(address_size > 0);
+	assert(size_size > 0);
+	size_t n_trips = value_len / (address_size + address_size + size_size);
+
+	// Allocate memory for the buffers
+	void *child_bus_addrs = state.bump.alloc_aligned(&state.bump, address_size * n_trips, address_size);
+	void *parent_bus_addrs = state.bump.alloc_aligned(&state.bump, address_size * n_trips, address_size);
+	void *lengths = state.bump.alloc_aligned(&state.bump, size_size * n_trips, size_size);
+
+	for (size_t i = 0, j = 0; i < n_trips; i++) {
+		// Read a child bus address
+		switch (address_cells) {
+		case 1:
+			((u32 *)child_bus_addrs)[i] = READ_BIG_ENDIAN_U32(value + j);
+			break;
+		case 2:
+			((u64 *)child_bus_addrs)[i] = READ_BIG_ENDIAN_U64(value + j);
+			break;
+		case 3:
+			((u128 *)child_bus_addrs)[i] = READ_BIG_ENDIAN_U128(value + j);
+			break;
+		default:
+			__builtin_unreachable();
+		}
+		j += address_size;
+
+		// Read a parent bus address
+		switch (address_cells) {
+		case 1:
+			((u32 *)parent_bus_addrs)[i] = READ_BIG_ENDIAN_U32(value + j);
+			break;
+		case 2:
+			((u64 *)parent_bus_addrs)[i] = READ_BIG_ENDIAN_U64(value + j);
+			break;
+		case 3:
+			((u128 *)parent_bus_addrs)[i] = READ_BIG_ENDIAN_U128(value + j);
+			break;
+		default:
+			__builtin_unreachable();
+		}
+		j += address_size;
+
+		// Read a length
+		switch (size_cells) {
+		case 1:
+			((u32 *)lengths)[i] = READ_BIG_ENDIAN_U32(value + j);
+			break;
+		case 2:
+			((u64 *)lengths)[i] = READ_BIG_ENDIAN_U64(value + j);
+			break;
+		default:
+			PANIC_LOOP("Unsupported size_cells: %d", size_cells);
+		}
+		j += size_size;
+	}
+
+	prop->type = DTB_PROP_RANGES;
+	prop->data.ranges.child_bus_addrs = child_bus_addrs;
+	prop->data.ranges.parent_bus_addrs = parent_bus_addrs;
+	prop->data.ranges.lengths = lengths;
+	prop->data.ranges.n_trips = n_trips;
+}
+
+errval_t dtb_recursive_property_rewrite(struct dtNode *node)
 {
 	errval_t err = ERR_OK;
 
-	u32 next_address_cells = address_cells;
-	u32 next_size_cells = size_cells;
+	u32 next_address_cells = node->address_cells;
+	u32 next_size_cells = node->size_cells;
 
 	ASSERT(node != NULL, "Node must not be NULL for property rewriting.");
 	// Rewrite properties of the current node
@@ -355,8 +427,10 @@ errval_t dtb_recursive_property_rewrite(struct dtNode *node, u32 address_cells, 
 			prop->data.device_type = prop->data.raw.value;
 		} else if (strcmp(prop->name, "reg") == 0) {
 			println("node: %s, address_cells: %d, size_cells: %d",
-				node->name, next_address_cells, next_size_cells);
-			dtb_rewrite_property_reg(prop, address_cells, size_cells);
+				node->name, node->address_cells, node->size_cells);
+			dtb_rewrite_property_reg(prop, node->address_cells, node->size_cells);
+		} else if (strcmp(prop->name, "ranges") == 0) {
+			dtb_rewrite_property_ranges(prop, node->address_cells, node->size_cells);
 		} else {
 			println("[dtb_recursive_property_rewrite] Unhandled property: %s", prop->name);
 		}
@@ -364,7 +438,9 @@ errval_t dtb_recursive_property_rewrite(struct dtNode *node, u32 address_cells, 
 
 	// Recursively rewrite properties for child nodes
 	for (struct dtNode *child = node->children; child != NULL; child = child->sibling) {
-		if (err_is_fail((err = dtb_recursive_property_rewrite(child, next_address_cells, next_size_cells)))) {
+		child->address_cells = next_address_cells;
+		child->size_cells = next_size_cells;
+		if (err_is_fail((err = dtb_recursive_property_rewrite(child)))) {
 			return err;
 		}
 	}
@@ -442,51 +518,82 @@ void dtb_recursive_print(size_t depth, struct dtNode *node)
 			println("Property: device_type, Value: \"%s\"", prop->data.device_type);
 			break;
 		case DTB_PROP_REG:
-			print("Property: reg, Address Cells: %d, Size Cells: %d, Pairs: %d",
-			      prop->data.reg.address_cells, prop->data.reg.size_cells, prop->data.reg.n_pairs);
-			if (prop->data.reg.addresses != NULL) {
-				print(", Addresses [");
-				for (size_t i = 0; i < prop->data.reg.n_pairs; i++) {
-					if (i > 0) {
-						print(", ");
-					}
-					switch (prop->data.reg.address_cells) {
-					case 1:
-						print("%x", ((u32 *)prop->data.reg.addresses)[i]);
-						break;
-					case 2:
-						print("%x", ((u64 *)prop->data.reg.addresses)[i]);
-						break;
-					case 3:
-						print("%x", ((u128 *)prop->data.reg.addresses)[i]);
-						break;
-					default:
-						__builtin_unreachable();
-					}
+			print("Property: reg, Address Cells: %d, Size Cells: %d, Pairs: [",
+			      node->address_cells, node->size_cells);
+			for (size_t i = 0; i < prop->data.reg.n_pairs; i++) {
+				if (i > 0) {
+					print(", ");
 				}
-				print("]");
-			}
+				switch (node->address_cells) {
+				case 1:
+					print("(Addr: %x", ((u32 *)prop->data.reg.addresses)[i]);
+					break;
+				case 2:
+					print("(Addr: %x", ((u64 *)prop->data.reg.addresses)[i]);
+					break;
+				case 3:
+					print("(Addr: %x", ((u128 *)prop->data.reg.addresses)[i]);
+					break;
+				default:
+					print("(Addr: N/A)");
+				}
 
-			if (prop->data.reg.sizes != NULL) {
-				print(", Sizes [");
-				for (size_t i = 0; i < prop->data.reg.n_pairs; i++) {
-					if (i > 0) {
-						print(", ");
-					}
-					switch (prop->data.reg.size_cells) {
-					case 1:
-						print("%x", ((u32 *)prop->data.reg.sizes)[i]);
-						break;
-					case 2:
-						print("%x", ((u64 *)prop->data.reg.sizes)[i]);
-						break;
-					default:
-						__builtin_unreachable();
-					}
+				switch (node->size_cells) {
+				case 1:
+					print(", Size: %x)", ((u32 *)prop->data.reg.sizes)[i]);
+					break;
+				case 2:
+					print(", Size: %x)", ((u64 *)prop->data.reg.sizes)[i]);
+					break;
+				default:
+					assert(prop->data.reg.sizes == NULL);
+					print(", Size: N/A)");
+					break;
 				}
-				print("]");
 			}
-			println("");
+			println("]");
+			break;
+		case DTB_PROP_RANGES:
+			print("Property: ranges, Address Cells: %d, Size Cells: %d, Triplets: [",
+			      node->address_cells, node->size_cells);
+			for (size_t i = 0; i < prop->data.ranges.n_trips; i++) {
+				if (i > 0) {
+					print(", ");
+				}
+
+				switch (node->address_cells) {
+				case 1:
+					print("(Child: %x, Parent: %x",
+					      ((u32 *)prop->data.ranges.child_bus_addrs)[i],
+					      ((u32 *)prop->data.ranges.parent_bus_addrs)[i]);
+					break;
+				case 2:
+					print("(Child: %x, Parent: %x",
+					      ((u64 *)prop->data.ranges.child_bus_addrs)[i],
+					      ((u64 *)prop->data.ranges.parent_bus_addrs)[i]);
+						break;
+				case 3:
+					print("(Child: %x, Parent: %x",
+					      ((u128 *)prop->data.ranges.child_bus_addrs)[i],
+					      ((u128 *)prop->data.ranges.parent_bus_addrs)[i]);
+					break;
+				default:
+					__builtin_unreachable();
+				}
+
+				switch (node->size_cells) {
+				case 1:
+					print(", Length: %x)", ((u32 *)prop->data.ranges.lengths)[i]);
+					break;
+				case 2:
+					print(", Length: %x)", ((u64 *)prop->data.ranges.lengths)[i]);
+					break;
+				default:
+					print(", Length: %x)", ((u128 *)prop->data.ranges.lengths)[i]);
+					break;
+			}
+			}
+			println("]");
 			break;
 		}
 	}

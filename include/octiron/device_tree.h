@@ -50,6 +50,9 @@ enum dtPropertyType {
 	/// reg property, describes the address of the device’s resources within the address space defined by its parent
 	/// bus
 	DTB_PROP_REG,
+	/// ranges property, describes the address translation between the address space of the bus and the address
+	/// space of the bus node's parent.
+	DTB_PROP_RANGES,
 };
 
 struct dtPropRaw {
@@ -79,16 +82,24 @@ struct dtPropStatus {
 };
 
 struct dtPropReg {
-	/// The number of <u32> cells used to encode the address field in this property
-	u32 address_cells;
-	/// The number of <u32> cells used to encode the size field in this property
-	u32 size_cells;
-	/// The number of (address, size) pairs.
-	u32 n_pairs;
 	/// List of addresses. NULL if address_cells == 0.
 	void* addresses;
 	/// List of sizes corresponding to the addresses. NULL if size_cells == 0.
 	void* sizes;
+	/// The number of (address, size) pairs.
+	u32 n_pairs;
+
+};
+
+struct dtPropRanges {
+	/// List of child bus addresses. NULL if address_cells == 0.
+	void* child_bus_addrs;
+	/// List of parent bus addresses. NULL if address_cells == 0.
+	void* parent_bus_addrs;
+	/// List of region lengths. NULL if size_cells == 0.
+	void* lengths;
+	/// The number of (child-bus-addr, parent-bus-addr, length) triplets.
+	u32 n_trips;
 };
 
 struct dtProperty {
@@ -120,6 +131,9 @@ struct dtProperty {
 		const char *device_type;
 		/// Defines the address of the device’s resources within the address space defined by its parent bus.
 		struct dtPropReg reg;
+		/// Defines the address translation between the address space of the bus and the address space of the bus
+		/// node's parent.
+		struct dtPropRanges ranges;
 
 	} data;
 };
@@ -127,6 +141,10 @@ struct dtProperty {
 struct dtNode {
 	/// Name of the node
 	const char *name;
+	/// The number of <u32> cells used to encode the address field in this node's reg property
+	u32 address_cells;
+	/// The number of <u32> cells used to encode the size field in this node's reg property
+	u32 size_cells;
 	/// Properties of the node
 	struct dtProperty *properties;
 	/// Pointer to the parent node (NULL for root)
