@@ -12,6 +12,29 @@ size_t strlen(const char *str)
 	return end - str;
 }
 
+int strcmp(const char *lhs, const char *rhs)
+{
+	while (*lhs && (*lhs == *rhs)) {
+		lhs++;
+		rhs++;
+	}
+	return *(unsigned char *)lhs - *(unsigned char *)rhs;
+}
+
+int strncmp(const char *lhs, const char *rhs, size_t num)
+{
+	while (num && *lhs && (*lhs == *rhs)) {
+		lhs++;
+		rhs++;
+		num--;
+	}
+	if (num == 0) {
+		return 0; // Strings are equal up to num characters
+	}
+	return *(unsigned char *)lhs - *(unsigned char *)rhs;
+}
+
+
 // Character Array Manipulation
 
 void *memset(void *dest, int ch, size_t count)

@@ -99,7 +99,6 @@ size_t kinit(void)
 	kernel_id_map_range(root, DATA_START, DATA_END, SV39_FLAGS_READ | SV39_FLAGS_WRITE);
 	kernel_id_map_range(root, BSS_START, BSS_END, SV39_FLAGS_READ | SV39_FLAGS_WRITE);
 	kernel_id_map_range(root, STACK_START, STACK_END, SV39_FLAGS_READ | SV39_FLAGS_WRITE);
-//	kernel_id_map_range(root, HEAP_START, HEAP_END, SV39_FLAGS_READ | SV39_FLAGS_WRITE);
 	kernel_id_map_range(root, UART_NS16550A_BASE, UART_NS16550A_BASE + BASE_PAGE_SIZE,
 			    SV39_FLAGS_READ | SV39_FLAGS_WRITE);
 	print("[kinit] Kernel paging initialized.\n");
@@ -130,11 +129,6 @@ size_t kinit(void)
 		ASSERT(OPT_EQ(pa, va), "STACK: Identity mapping failed, mapping valid: %d, va: %lx, pa: %lx\n", pa.some,
 		       va, pa.val);
 	}
-//	for (vaddr_t va = HEAP_START; va < HEAP_END; va += BASE_PAGE_SIZE) {
-//		OPT(paddr_t) pa = sv39_virt_to_phys(root, va);
-//		ASSERT(OPT_EQ(pa, va), "HEAP: Identity mapping failed, mapping valid: %d, va: %lx, pa: %lx\n", pa.some,
-//		       va, pa.val);
-//	}
 	for (vaddr_t va = UART_NS16550A_BASE; va < UART_NS16550A_BASE + BASE_PAGE_SIZE; va += BASE_PAGE_SIZE) {
 		OPT(paddr_t) pa = sv39_virt_to_phys(root, va);
 		ASSERT(OPT_EQ(pa, va), "UART: Identity mapping failed, mapping valid: %d, va: %lx, pa: %lx\n", pa.some,
@@ -147,15 +141,15 @@ size_t kinit(void)
 /// Note: The value of sepc (address of `kmain`) needs to have it's lower to bits be zeroed
 __attribute__((aligned(4))) void kmain(void)
 {
+	errval_t err = ERR_OK;
 	print("[kmain] Paging enabled. Kernel is now running with paging.\n");
 
 	// We parse the DTB block at this point because we need to figure out the special memory regions which should
 	// not be included in the Kernel Heap (including the dtb mapping itself).
-	RESULT(PTR(STRUCT(dtb_state))) dtb_result = dtb_parse(dtb_base_addr);
-	if (RESULT_IS_ERR(dtb_result)) {
-		PANIC_LOOP("[kmain] Failed to parse DTB: %s\n", err_str(dtb_result.u.err));
+	err = dt_parse(dtb_base_addr);
+	if (err_is_fail(err)) {
+		PANIC_LOOP("[kmain] Failed to parse DTB: %s\n", err_str(err));
 	}
-
 
 	// Main loop of the kernel
 	print("[kmain] Kernel loop reached.\n");

@@ -2,6 +2,7 @@
 
 #include <kzadhbat/fmtprint.h>
 
+#ifdef ENABLE_ASSERTIONS
 #define ASSERT(expr, msg, ...)                                 \
 	do {                                                   \
 		if (!(expr)) {                                 \
@@ -10,6 +11,12 @@
 			}                                      \
 		}                                              \
 	} while (0)
+#else
+#define ASSERT(expr, msg, ...) ((void)(expr))
+#endif
+
+#define assert(expr) ASSERT(expr, "Assertion failed: " #expr)
+
 
 #define TODO(msg, ...)                                          \
 	do {                                                    \

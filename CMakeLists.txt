@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.16)
 project(riscv_kernel C ASM)
 
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_compile_definitions(ENABLE_ASSERTIONS)
+    message(STATUS "Assertions enabled (Debug build)")
+endif()
+
 # Specify cross-compiler tools (defined in the toolchain file)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)

@@ -44,6 +44,14 @@ static const char *grouper_error_str[] = {
 		"Failed to map the Device Tree Blob into the kernel's page table.",
 	[ERR_DTB_UNCLOSED_ROOT_NODE] =
 		"Device Tree Blob parsing failed because the root node was not closed properly. Ensure that the DTB is well-formed.",
+	[ERR_DTB_NO_NODES] =
+		"Device Tree Blob parsing failed because no nodes were found in the DTB. Ensure that the DTB is well-formed and contains nodes.",
+	[ERR_DTB_ADDRESS_CELLS_TOO_LARGE] =
+		"Device Tree Blob parsing failed because an #address-cells property was encountered with a value larger than 3.",
+	[ERR_DTB_SIZE_CELLS_TOO_LARGE] =
+		"Device Tree Blob parsing failed because a #size-cells property was encountered with a value larger than 2.",
+	[ERR_DTB_REWRITE_FAILED] =
+		"Device Tree Blob property rewriting failed. This may be due to an unsupported property type or a malformed DTB.",
 
 	// Add new error strings here as needed:
 };

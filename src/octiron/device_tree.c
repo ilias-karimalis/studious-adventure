@@ -1,12 +1,12 @@
 #include <octiron/device_tree.h>
 #include <octiron/paging.h>
-//#include <octiron/array.h>
+
 #include <kzadhbat/bitmacros.h>
 #include <kzadhbat/arch/riscv.h>
 
 /// The parsed state of the Device Tree Blob (DTB).
 /// As of now, I'm assuming that the kernel will only ever need to parse a single DTB.
-struct dtb_state dtb_state = { 0 };
+struct dt state = { 0 };
 
 struct dtb_header {
 	u32 magic;
@@ -21,211 +21,178 @@ struct dtb_header {
 	u32 size_dt_struct;
 };
 
-#define READ_U32(ptr, offset) (ENDIANNESS_FLIP_U32(((u32*) (ptr))[offset / sizeof(u32)]))
+#define FDT_BEGIN_NODE ((u32)0x00000001)
+#define FDT_END_NODE ((u32)0x00000002)
+#define FDT_PROP ((u32)0x00000003)
+#define FDT_NOP ((u32)0x00000004)
+#define FDT_END ((u32)0x00000009)
 
-#define FDT_BEGIN_NODE	((u32) 0x00000001)
-#define FDT_END_NODE	((u32) 0x00000002)
-#define FDT_PROP	((u32) 0x00000003)
-#define FDT_NOP		((u32) 0x00000004)
-#define FDT_END		((u32) 0x00000009)
-
-size_t dtb_parse_node(struct dtb_node **curr, u8 *structures, size_t off);
-size_t dtb_parse_property(struct dtb_node *curr, u8 *structures, u8 *strings, size_t off);
+size_t dtb_parse_node(struct dtNode **curr, u8 *structures, size_t off);
+size_t dtb_parse_property(struct dtNode *curr, u8 *structures, u8 *strings, size_t off);
+errval_t dtb_recursive_property_rewrite(struct dtNode *node, u32 address_cells, u32 size_cells);
 void dtb_print_tree(void);
 
-
-RESULT(PTR(STRUCT(dtb_state))) dtb_parse(vaddr_t dtb_base_addr)
+errval_t dt_parse(paddr_t dtb_base_addr)
 {
-	println("[dtb_parse] Parsing DTB at address: %x", dtb_base_addr);
+	println("[dt_parse] Parsing DTB at address: %x", dtb_base_addr);
 
 	// Map the DTB base address to the kernel's page table.
 	sv39_pageTable *root = sv39_kernel_page_table();
 	paddr_t aligned_base = ALIGN_DOWN(dtb_base_addr, BASE_PAGE_SIZE);
-	errval_t err = sv39_map(root, aligned_base, aligned_base, SV39_FLAGS_READ | SV39_FLAGS_EXECUTE, sv39_Page);
-	if (err_is_fail(err))
-	{
-		return RESULT_ERR(PTR(STRUCT(dtb_state)), err_push(err, ERR_DTB_MAPPING_FAILED));
+	errval_t err = sv39_map(root, aligned_base, aligned_base, SV39_FLAGS_READ, sv39_Page);
+	if (err_is_fail(err)) {
+		return err_push(err, ERR_DTB_MAPPING_FAILED);
 	}
 
 	// The dtb header integers are all stored in big-endian format, and with our system being little-endian,
 	// we need to ensure that we read them correctly.
-	struct dtb_header* header = (struct dtb_header *)dtb_base_addr;
+	struct dtb_header *header = (struct dtb_header *)dtb_base_addr;
 
 	// Check if the dtb header is valid by checking the magic number
-	if (0x0D00DFEED != ENDIANNESS_FLIP_U32(header->magic))
-	{
-		return RESULT_ERR(PTR(STRUCT(dtb_state)), ERR_DTB_MAGIC_NUMBER);
+	if (0x0D00DFEED != ENDIANNESS_FLIP_U32(header->magic)) {
+		return ERR_DTB_MAGIC_NUMBER;
 	}
-
-	// Print the header information
-	println("DTB Header:");
-	println("  Magic: %x", (u64) ENDIANNESS_FLIP_U32(header->magic));
-	println("  Total Size: %x bytes", ENDIANNESS_FLIP_U32(header->totalsize));
-	println("  Off DT Struct: %x bytes", ENDIANNESS_FLIP_U32(header->off_dt_struct));
-	println("  Off DT Strings: %x bytes", ENDIANNESS_FLIP_U32(header->off_dt_strings));
-	println("  Off Mem Rsvmap: %x bytes", ENDIANNESS_FLIP_U32(header->off_mem_rsvmap));
-	println("  Version: %d", ENDIANNESS_FLIP_U32(header->version));
-	println("  Last Compiled Version: %d", ENDIANNESS_FLIP_U32(header->last_comp_version));
-	println("  Boot CPU ID Phys: %d", ENDIANNESS_FLIP_U32(header->boot_cpuid_phys));
-	println("  Size DT Strings: %x bytes", ENDIANNESS_FLIP_U32(header->size_dt_strings));
-	println("  Size DT Struct: %x bytes", ENDIANNESS_FLIP_U32(header->size_dt_struct));
 
 	// Given the length of the DTB, we may need to map more than one page into the kernel's vspace
 	size_t dtb_size = ENDIANNESS_FLIP_U32(header->totalsize);
-	for (paddr_t pa = aligned_base + BASE_PAGE_SIZE; pa < dtb_base_addr + dtb_size; pa += BASE_PAGE_SIZE)
-	{
-		println("[dtb_parse] Mapping additional DTB page at address: %x", pa);
-		err = sv39_map(root, pa, pa, SV39_FLAGS_READ | SV39_FLAGS_EXECUTE, sv39_Page);
-		if (err_is_fail(err))
-		{
-			return RESULT_ERR(PTR(STRUCT(dtb_state)), err_push(err, ERR_DTB_MAPPING_FAILED));
+	for (paddr_t pa = aligned_base + BASE_PAGE_SIZE; pa < dtb_base_addr + dtb_size; pa += BASE_PAGE_SIZE) {
+		println("[dt_parse] Mapping additional DTB page at address: %x", pa);
+		err = sv39_map(root, pa, pa, SV39_FLAGS_READ, sv39_Page);
+		if (err_is_fail(err)) {
+			return err_push(err, ERR_DTB_MAPPING_FAILED);
 		}
 	}
 
-	// Initialize the dtb_state structure
-	dtb_state.reserved_memory = ARRAY_INIT(STRUCT(dtb_reservedRegion));
-	dtb_state.nodes = ARRAY_INIT(STRUCT(dtb_node));
-	dtb_state.properties = ARRAY_INIT(STRUCT(dtb_property));
+	// Initialize the dt structure
+	state.reserved_memory = ARRAY_INIT(STRUCT(dtReservedRegion));
+	state.nodes = ARRAY_INIT(STRUCT(dtNode));
+	state.properties = ARRAY_INIT(STRUCT(dtProperty));
 
-	// Allocate memory for the string bump allocator, which will be used to store the strings in the DTB.
-	u8* allocator_buf = NULL;
-	err = pmm_alloc(32 * BASE_PAGE_SIZE, &allocator_buf);
-	if (err_is_fail(err)) { return RESULT_ERR(PTR(STRUCT(dtb_state)), err); }
-	bump_init(&dtb_state.allocator, allocator_buf, 2 * BASE_PAGE_SIZE);
-
+	// Allocate memory for the bumpAllocator allocator, which we will use to allocate strings and other device
+	// tree structures.
+	u8 *allocator_buf = NULL;
+	err = pmm_alloc(2 * BASE_PAGE_SIZE, &allocator_buf);
+	if (err_is_fail(err))
+		return err;
+	bump_init(&state.bump, allocator_buf, 2 * BASE_PAGE_SIZE);
 
 	// Parse the Memory Reservation Block
-	u64* mem_rsvmap = (u64 *) (dtb_base_addr + ENDIANNESS_FLIP_U32(header->off_mem_rsvmap));
+	u64 *mem_rsvmap = (u64 *)(dtb_base_addr + ENDIANNESS_FLIP_U32(header->off_mem_rsvmap));
 	while (mem_rsvmap[0] != 0 && mem_rsvmap[1] != 0) {
-		struct dtb_reservedRegion rr;
+		struct dtReservedRegion rr;
 		rr.address = ENDIANNESS_FLIP_U64(mem_rsvmap[0]);
-		rr.size    = ENDIANNESS_FLIP_U64(mem_rsvmap[1]);
-		ARRAY_PUSH(dtb_state.reserved_memory, rr);
+		rr.size = ENDIANNESS_FLIP_U64(mem_rsvmap[1]);
+		ARRAY_PUSH(state.reserved_memory, rr);
 	}
 
 	// Parse the structure and string blocks.
-	u8* structures = (u8 *)(dtb_base_addr + ENDIANNESS_FLIP_U32(header->off_dt_struct));
-	u8* strings = (u8 *)(dtb_base_addr + ENDIANNESS_FLIP_U32(header->off_dt_strings));
+	u8 *structures = (u8 *)(dtb_base_addr + ENDIANNESS_FLIP_U32(header->off_dt_struct));
+	u8 *strings = (u8 *)(dtb_base_addr + ENDIANNESS_FLIP_U32(header->off_dt_strings));
 
-	// Place and initialize the root node.
-	ARRAY_PUSH(dtb_state.nodes, ((struct dtb_node) {
-					    .name = NULL,
-					    .properties = NULL,
-					    .parent = NULL,
-					    .children = NULL,
-					    .sibling = NULL
-				    }));
-	struct dtb_node* root_node = &dtb_state.nodes.data[0];
+	struct dtNode *root_node = NULL;
 	size_t off = 0;
 	size_t depth = 0;
 
-	struct dtb_node* curr = root_node;
+	struct dtNode *curr = root_node;
 	for (;;) {
 		ASSERT(off % 4 == 0, "Accesses must be 4 bytes aligned.");
-		u32 token = READ_U32(structures, off);
+		u32 token = READ_BIG_ENDIAN_U32(structures + off);
 		off += sizeof(u32);
 
 		switch (token) {
 		case FDT_BEGIN_NODE:
-//			println("FDT_BEGIN_NODE Token");
 			off = dtb_parse_node(&curr, structures, off);
+			if (depth == 0 && curr->name[0] == '\0') {
+				// We just parsed the root node, if it's not named we set it to "/"
+				curr->name = "/";
+			}
 			depth++;
 			break;
 
 		case FDT_END_NODE:
-//			println("FDT_END_NODE Token");
 			curr = curr->parent;
 			depth--;
 			break;
 
 		case FDT_PROP:
-//			println("FDT_PROP Token");
 			off = dtb_parse_property(curr, structures, strings, off);
 			break;
 
 		case FDT_NOP:
-//			println("FDT_NOP Token");
 			break;
 
 		case FDT_END:
-//			println("FDT_END Token");
-			if (curr != root_node) {
-				PANIC_LOOP("FDT_END token found, but current node is not the root node. Depth: %d", depth);
+			if (curr != NULL) {
+				PANIC_LOOP("FDT_END token found, but current node is not the root node. Depth: %d",
+					   depth);
 			}
-			dtb_print_tree();
-			TODO("DTB Parsing isn't complete!");
-			return RESULT_OK(PTR(STRUCT(dtb_state)), &dtb_state);
+			goto dtb_second_pass;
 		default:
 			PANIC_LOOP("Unknown structure type: %x", token);
 		}
 	}
+
+dtb_second_pass:
+	// The first allocated node is the root node, so we can set it as the root of the device tree.
+	if (ARRAY_SIZE(state.nodes) == 0) {
+		return ERR_DTB_NO_NODES;
+	}
+	state.root = &state.nodes.data[0];
+
+	// Now that we have parsed the device tree, we can rewrite properties as needed.
+	err = dtb_recursive_property_rewrite(state.root, 2, 1);
+	if (err_is_fail(err))
+		return err_push(err, ERR_DTB_REWRITE_FAILED);
+
+	dtb_print_tree();
+	println("bump free memory: %x bytes", state.bump.size - state.bump.index);
+	return ERR_OK;
 }
 
-
-size_t dtb_parse_property(struct dtb_node *curr, u8 *structures, u8 *strings, size_t off)
+size_t dtb_parse_property(struct dtNode *curr, u8 *structures, u8 *strings, size_t off)
 {
-	u32 prop_len = READ_U32(structures, off);
+	u32 prop_len = READ_BIG_ENDIAN_U32(structures + off);
 	off += sizeof(u32);
-	u32 name_offset = READ_U32(structures, off);
+	u32 name_offset = READ_BIG_ENDIAN_U32(structures + off);
 	off += sizeof(u32);
 
-	size_t prop_name_len = strlen((const char *)&strings[name_offset]) + 1;
-	char *prop_name = (char *)bump_alloc(&dtb_state.allocator, prop_name_len);
-	ASSERT(prop_name != NULL, "Bump alloc should not return NULL");
-	memcpy(prop_name, &strings[name_offset], prop_name_len);
+	const char *prop_name = state.bump.str_copy(&state.bump, &strings[name_offset]);
+	println("[dtb_parse_property] Parsing property: %s, Length: %d", prop_name, prop_len);
 
-	void* prop_value = NULL;
-	if (prop_len != 0) {
-		prop_value = bump_alloc(&dtb_state.allocator, prop_len);
-		ASSERT(prop_value != NULL, "Bump alloc should not return NULL");
-	}
-	memcpy(prop_value, &structures[off], prop_len);
+	void *prop_value = state.bump.copy(&state.bump, &structures[off], prop_len);
 	off += ALIGN_UP(prop_len, sizeof(u32));
 
-	ARRAY_PUSH(dtb_state.properties, ((struct dtb_property){
-		.name = prop_name,
-		.value = prop_value,
-		.value_len = prop_len,
-		.next = NULL
-	}));
-	struct dtb_property *new = &dtb_state.properties.data[ARRAY_SIZE(dtb_state.properties) - 1];
-
-	new->next = curr->properties;
+	ARRAY_PUSH(state.properties, ((struct dtProperty){ .name = prop_name,
+							   .next = curr->properties,
+							   .type = DTB_PROP_RAW,
+							   .data.raw = {
+								   .value = prop_value,
+								   .value_len = prop_len,
+							   } }));
+	struct dtProperty *new = &state.properties.data[ARRAY_SIZE(state.properties) - 1];
 	curr->properties = new;
-//	if (curr->properties == NULL) {
-//		curr->properties = new;
-//	} else {
-//		struct dtb_property *last_prop = curr->properties;
-//		while (last_prop->next != NULL) {
-//			last_prop = last_prop->next;
-//		}
-//		last_prop->next = new;
-//	}
 	return off;
 }
 
-size_t dtb_parse_node(struct dtb_node **curr, u8 *structures, size_t off)
+size_t dtb_parse_node(struct dtNode **curr, u8 *structures, size_t off)
 {
-	const char *node_name = (const char *)&structures[off];
-	size_t name_len = strlen(node_name) + 1;
-	char *name_buf = bump_alloc(&dtb_state.allocator, name_len);
+	const char *name_buf = state.bump.str_copy(&state.bump, (void *)&structures[off]);
 	ASSERT(name_buf != NULL, "Failed to allocate memory for node name.");
-	memcpy(name_buf, node_name, name_len);
+	size_t name_len = strlen(name_buf) + 1;
 
-	ARRAY_PUSH(dtb_state.nodes,
-		   ((struct dtb_node){
-			   .name = name_buf,
-			   .properties = NULL,
-			   .parent = *curr,
-			   .children = NULL,
-			   .sibling = NULL
-		   }));
-	struct dtb_node *new = &dtb_state.nodes.data[ARRAY_SIZE(dtb_state.nodes) - 1];
+	ARRAY_PUSH(state.nodes,
+		   ((struct dtNode){
+			   .name = name_buf, .properties = NULL, .parent = *curr, .children = NULL, .sibling = NULL }));
+	struct dtNode *new = &state.nodes.data[ARRAY_SIZE(state.nodes) - 1];
+	if (*curr == NULL) {
+		*curr = new;
+		return off + ALIGN_UP(name_len, sizeof(u32));
+	}
 
 	if ((*curr)->children == NULL) {
 		(*curr)->children = new;
 	} else {
-		struct dtb_node *last_child = (*curr)->children;
+		struct dtNode *last_child = (*curr)->children;
 		while (last_child->sibling != NULL) {
 			last_child = last_child->sibling;
 		}
@@ -235,7 +202,180 @@ size_t dtb_parse_node(struct dtb_node **curr, u8 *structures, size_t off)
 	return off + ALIGN_UP(name_len, sizeof(u32)); // Move the offset past the node name
 }
 
-void dtb_recursive_print(size_t depth, struct dtb_node *node) {
+void dtb_rewrite_property_compatible(struct dtProperty *prop)
+{
+	ASSERT(prop->type == DTB_PROP_RAW, "At rewrite time, the property must be a pre-parse property.");
+	u32 value_len = prop->data.raw.value_len;
+	char *value = prop->data.raw.value;
+	// Count the number of strings in the value
+	size_t num_strings = 0;
+	for (size_t i = 0; i < value_len; i++) {
+		if (value[i] == '\0') {
+			num_strings++;
+		}
+	}
+
+	prop->data.compat = state.bump.alloc_aligned(&state.bump, sizeof(void *) * (num_strings + 1), sizeof(void *));
+	ASSERT(prop->data.compat != NULL, "Failed to allocate memory for compatible property.");
+	for (size_t i = 0, j = 0; j < value_len; i++) {
+		prop->data.compat[i] = &value[j];
+		j += strlen(&value[j]) + 1;
+	}
+	prop->data.compat[num_strings] = NULL;
+	prop->type = DTB_PROP_COMPATIBLE;
+}
+
+void dtb_rewrite_property_status(struct dtProperty *prop)
+{
+	ASSERT(prop->type == DTB_PROP_RAW, "At rewrite time, the property must be a pre-parse property.");
+	prop->type = DTB_PROP_STATUS;
+	if (strcmp(prop->data.raw.value, "okay") == 0) {
+		prop->data.status.value = DTB_PROP_STATUS_OK;
+		prop->data.status.reason = NULL;
+	} else if (strcmp(prop->data.raw.value, "disabled") == 0) {
+		prop->data.status.value = DTB_PROP_STATUS_DISABLED;
+		prop->data.status.reason = NULL;
+	} else if (strcmp(prop->data.raw.value, "reserved") == 0) {
+		prop->data.status.value = DTB_PROP_STATUS_RESERVED;
+		prop->data.status.reason = NULL;
+	} else if (strcmp(prop->data.raw.value, "fail") == 0) {
+		prop->data.status.value = DTB_PROP_STATUS_FAIL;
+		prop->data.status.reason = NULL;
+	} else if (strncmp(prop->data.raw.value, "fail-", 5) == 0) {
+		prop->data.status.value = DTB_PROP_STATUS_FAIL_SSS;
+		prop->data.status.reason = prop->data.raw.value + 5; // Skip the "fail-" prefix
+	} else {
+		ASSERT(false, "[dtb_rewrite_property_status] Unknown status value: %s", prop->data.raw.value);
+	}
+}
+
+void dtb_rewrite_property_reg(struct dtProperty *prop, u32 address_cells, u32 size_cells)
+{
+	void *value = prop->data.raw.value;
+	u32 value_len = prop->data.raw.value_len;
+	u32 address_size = sizeof(u32) * address_cells;
+	u32 size_size = sizeof(u32) * size_cells;
+
+	size_t n_pairs = value_len / (address_size + size_size);
+	assert(n_pairs > 0);
+	assert(value_len % (address_size + size_size) == 0);
+	assert(address_cells <= 3);
+	assert(size_cells <= 2);
+
+	// Allocate memory for the reg property
+	void *addresses = state.bump.alloc_aligned(&state.bump, address_size * n_pairs, address_size);
+	void *sizes = state.bump.alloc_aligned(&state.bump, size_size * n_pairs, size_size);
+	assert((address_size == 0) ? addresses == NULL : addresses != NULL);
+	assert((size_size == 0) ? sizes == NULL : sizes != NULL);
+
+	for (size_t i = 0, j = 0; i < n_pairs; i++) {
+		// Read an address
+		switch (address_cells) {
+		case 0:
+			break;
+		case 1:
+			((u32 *)addresses)[i] = READ_BIG_ENDIAN_U32(value + j);
+			break;
+		case 2:
+			((u64 *)addresses)[i] = READ_BIG_ENDIAN_U64(value + j);
+			break;
+		case 3:
+			((u128 *)addresses)[i] = READ_BIG_ENDIAN_U128(value + j);
+			break;
+		default:
+			__unreachable();
+		}
+		j += address_size;
+
+		// Read a size
+		switch (size_cells) {
+		case 0:
+			break;
+		case 1:
+			((u32 *)addresses)[i] = READ_BIG_ENDIAN_U32(value + j);
+			break;
+		case 2:
+			((u64 *)addresses)[i] = READ_BIG_ENDIAN_U64(value + j);
+			break;
+		default:
+			__unreachable();
+		}
+		j += size_size;
+	}
+
+	prop->type = DTB_PROP_REG;
+	prop->data.reg.address_cells = address_cells;
+	prop->data.reg.size_cells = size_cells;
+	prop->data.reg.n_pairs = n_pairs;
+	prop->data.reg.addresses = addresses;
+	prop->data.reg.sizes = sizes;
+}
+
+errval_t dtb_recursive_property_rewrite(struct dtNode *node, u32 address_cells, u32 size_cells)
+{
+	errval_t err = ERR_OK;
+
+	u32 next_address_cells = address_cells;
+	u32 next_size_cells = size_cells;
+
+	ASSERT(node != NULL, "Node must not be NULL for property rewriting.");
+	// Rewrite properties of the current node
+	for (struct dtProperty *prop = node->properties; prop != NULL; prop = prop->next) {
+		if (strcmp(prop->name, "compatible") == 0) {
+			dtb_rewrite_property_compatible(prop);
+		} else if (strcmp(prop->name, "model") == 0) {
+			const char *value = prop->data.raw.value;
+			prop->type = DTB_PROP_MODEL;
+			prop->data.model = value;
+		} else if (strcmp(prop->name, "phandle") == 0 || strcmp(prop->name, "linux,phandle") == 0) {
+			prop->type = DTB_PROP_PHANDLE;
+			prop->data.phandle = READ_BIG_ENDIAN_U32(prop->data.raw.value);
+		} else if (strcmp(prop->name, "status") == 0) {
+			dtb_rewrite_property_status(prop);
+		} else if (strcmp(prop->name, "#address-cells") == 0) {
+			prop->type = DTB_PROP_ADDRESS_CELLS;
+			prop->data.address_cells = READ_BIG_ENDIAN_U32(prop->data.raw.value);
+			if (prop->data.address_cells > 3) {
+				return ERR_DTB_ADDRESS_CELLS_TOO_LARGE;
+			}
+			next_address_cells = prop->data.address_cells;
+		} else if (strcmp(prop->name, "#size-cells") == 0) {
+			prop->type = DTB_PROP_SIZE_CELLS;
+			prop->data.size_cells = READ_BIG_ENDIAN_U32(prop->data.raw.value);
+			if (prop->data.size_cells > 2) {
+				return ERR_DTB_SIZE_CELLS_TOO_LARGE;
+			}
+			next_size_cells = prop->data.size_cells;
+		} else if (strcmp(prop->name, "dma-coherent") == 0) {
+			prop->type = DTB_PROP_DMA_COHERENCE;
+			prop->data.dma_coherence = true;
+		} else if (strcmp(prop->name, "dma-noncoherent") == 0) {
+			prop->type = DTB_PROP_DMA_COHERENCE;
+			prop->data.dma_coherence = false;
+		} else if (strcmp(prop->name, "device_type") == 0) {
+			prop->type = DTB_PROP_DEVICE_TYPE;
+			prop->data.device_type = prop->data.raw.value;
+		} else if (strcmp(prop->name, "reg") == 0) {
+			println("node: %s, address_cells: %d, size_cells: %d",
+				node->name, next_address_cells, next_size_cells);
+			dtb_rewrite_property_reg(prop, address_cells, size_cells);
+		} else {
+			println("[dtb_recursive_property_rewrite] Unhandled property: %s", prop->name);
+		}
+	}
+
+	// Recursively rewrite properties for child nodes
+	for (struct dtNode *child = node->children; child != NULL; child = child->sibling) {
+		if (err_is_fail((err = dtb_recursive_property_rewrite(child, next_address_cells, next_size_cells)))) {
+			return err;
+		}
+	}
+
+	return ERR_OK;
+}
+
+void dtb_recursive_print(size_t depth, struct dtNode *node)
+{
 	if (node == NULL) {
 		return;
 	}
@@ -247,71 +387,122 @@ void dtb_recursive_print(size_t depth, struct dtb_node *node) {
 	println("Node: %s", node->name);
 
 	// Print properties of the current node
-	for (struct dtb_property *prop = node->properties; prop != NULL; prop = prop->next) {
+	for (struct dtProperty *prop = node->properties; prop != NULL; prop = prop->next) {
 		for (size_t i = 0; i < depth * 2; i++) {
 			print(" ");
 		}
-		if (prop->value_len == 0) {
-			println("\tProperty: %s, Value length: 0, Value: <empty>", prop->name);
-		} else {
-			println("\tProperty: %s, Value length: %d, Value: %s", prop->name, prop->value_len, prop->value);
+		print("\t");
+		switch (prop->type) {
+		case DTB_PROP_RAW:
+			println("Unprocessed Property: %s, Value length: %d", prop->name, prop->data.raw.value_len);
+			break;
+		case DTB_PROP_COMPATIBLE:
+			print("Property: compatible, Values: [");
+			for (size_t i = 0; prop->data.compat[i] != NULL; i++) {
+				if (i > 0) {
+					print(", ");
+				}
+				print("\"%s\"", prop->data.compat[i]);
+			}
+			println("]");
+			break;
+		case DTB_PROP_MODEL:
+			println("Property: model, Value: \"%s\"", prop->data.model);
+			break;
+		case DTB_PROP_PHANDLE:
+			println("Property: phandle, Value: %d", prop->data.phandle);
+			break;
+		case DTB_PROP_STATUS:
+			switch (prop->data.status.value) {
+			case DTB_PROP_STATUS_OK:
+				println("Property: status, Value: okay");
+				break;
+			case DTB_PROP_STATUS_DISABLED:
+				println("Property: status, Value: disabled");
+				break;
+			case DTB_PROP_STATUS_RESERVED:
+				println("Property: status, Value: reserved");
+				break;
+			case DTB_PROP_STATUS_FAIL:
+				println("Property: status, Value: fail");
+				break;
+			case DTB_PROP_STATUS_FAIL_SSS:
+				println("Property: status, Value: fail - %s", prop->data.status.reason);
+				break;
+			}
+			break;
+		case DTB_PROP_ADDRESS_CELLS:
+			println("Property: #address-cells, Value: %d", prop->data.address_cells);
+			break;
+		case DTB_PROP_SIZE_CELLS:
+			println("Property: #size-cells, Value: %d", prop->data.size_cells);
+			break;
+		case DTB_PROP_DMA_COHERENCE:
+			println("Property: dma-coherence, Value: %s", prop->data.dma_coherence ? "true" : "false");
+			break;
+		case DTB_PROP_DEVICE_TYPE:
+			println("Property: device_type, Value: \"%s\"", prop->data.device_type);
+			break;
+		case DTB_PROP_REG:
+			print("Property: reg, Address Cells: %d, Size Cells: %d, Pairs: %d",
+			      prop->data.reg.address_cells, prop->data.reg.size_cells, prop->data.reg.n_pairs);
+			if (prop->data.reg.addresses != NULL) {
+				print(", Addresses [");
+				for (size_t i = 0; i < prop->data.reg.n_pairs; i++) {
+					if (i > 0) {
+						print(", ");
+					}
+					switch (prop->data.reg.address_cells) {
+					case 1:
+						print("%x", ((u32 *)prop->data.reg.addresses)[i]);
+						break;
+					case 2:
+						print("%x", ((u64 *)prop->data.reg.addresses)[i]);
+						break;
+					case 3:
+						print("%x", ((u128 *)prop->data.reg.addresses)[i]);
+						break;
+					default:
+						__unreachable();
+					}
+				}
+				print("]");
+			}
+
+			if (prop->data.reg.sizes != NULL) {
+				print(", Sizes [");
+				for (size_t i = 0; i < prop->data.reg.n_pairs; i++) {
+					if (i > 0) {
+						print(", ");
+					}
+					switch (prop->data.reg.size_cells) {
+					case 1:
+						print("%x", ((u32 *)prop->data.reg.sizes)[i]);
+						break;
+					case 2:
+						print("%x", ((u64 *)prop->data.reg.sizes)[i]);
+						break;
+					default:
+						__unreachable();
+					}
+				}
+				print("]");
+			}
+			println("");
+			break;
 		}
 	}
 
 	// Recursively print child nodes
-	for (struct dtb_node *child = node->children; child != NULL; child = child->sibling) {
+	for (struct dtNode *child = node->children; child != NULL; child = child->sibling) {
 		dtb_recursive_print(depth + 1, child);
 	}
-
 }
 
-
-void dtb_print_tree(void) {
+void dtb_print_tree(void)
+{
 	println("[dtb_print_tree] Printing the device tree structure:");
 
 	// Recursively print the device tree structure
-	dtb_recursive_print(0, &dtb_state.nodes.data[0]);
+	dtb_recursive_print(0, &state.nodes.data[0]);
 }
-
-
-//void dtb_recursive_print(u32* structure_block, u32* string_block, size_t i)
-//{
-//	switch (ENDIANNESS_FLIP_U32(structure_block[i]))
-//	{
-//	case FDT_BEGIN_NODE:
-//		i++;
-//		const char* node_name = (const char*) &structure_block[i];
-//		i += (strlen(node_name) + 3) / 4; // Move to the next word after the node name
-//		println("FDT_BEGIN_NODE Token [ %s ]");
-//		dtb_recursive_print(structure_block, string_block, i);
-//		break;
-//	case FDT_END_NODE:
-//		println("FDT_END_NODE Token");
-//		dtb_recursive_print(structure_block, string_block, ++i);
-//		return;
-//	case FDT_PROP:
-//		i++;
-//		u32 prop_len = ENDIANNESS_FLIP_U32(structure_block[i]);
-//		i++;
-//		u32 prop_nameoff = ENDIANNESS_FLIP_U32(structure_block[i]);
-//		i++;
-//		if (prop_len > 0) {
-//			char* prop_value = bump_alloc(&dtb_state.allocator, prop_len + 1);
-//			memcpy(prop_value, &structure_block[i], prop_len);
-//			prop_value[prop_len] = '\0';
-//			println("FDT_PROP Token [ %s, %s, %d ]", &string_block[prop_nameoff], prop_value, prop_len);
-//		} else {
-//			println("FDT_PROP Token [ %s, <empty> ]", &string_block[prop_nameoff]);
-//		}
-//		dtb_recursive_print(structure_block, string_block, i + ((prop_len + 3) / 4));
-//		break;
-//	case FDT_END:
-//		println("FDT_END Token");
-//		return;
-//	default:
-//		println("Unknown structure type: %x", ENDIANNESS_FLIP_U32(structure_block[i]));
-//		dtb_recursive_print(structure_block, string_block, ++i);
-//		break;
-//	}
-//
-//}

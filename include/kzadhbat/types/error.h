@@ -40,6 +40,10 @@ enum grouperError {
 	ERR_DTB_MAGIC_NUMBER,
 	ERR_DTB_MAPPING_FAILED,
 	ERR_DTB_UNCLOSED_ROOT_NODE,
+	ERR_DTB_NO_NODES,
+	ERR_DTB_ADDRESS_CELLS_TOO_LARGE,
+	ERR_DTB_SIZE_CELLS_TOO_LARGE,
+	ERR_DTB_REWRITE_FAILED,
 
 	/// @brief  Used to compute the number of enum values in enum grouper_error. Do not use this as an error value.
 	GROUPER_ERROR_GUARD_VALUE,

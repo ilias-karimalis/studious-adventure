@@ -21,7 +21,7 @@ def main():
 
     qemu_args = [
         QEMU_BINARY,
-        "-M", "virt",
+        "-M", "virt,acpi=on",
         "-cpu", "rv64",
         "-smp", "2",
         "-m", "4G",

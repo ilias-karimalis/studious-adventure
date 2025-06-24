@@ -29,12 +29,16 @@ void strlib_print_int(size_t val, size_t base)
 #define MAX_INT_BUF_SIZE 67
 	static char buf[MAX_INT_BUF_SIZE] = { 0 };
 	size_t i = MAX_INT_BUF_SIZE - 2;
+	if (val == 0) {
+		buf[i--] = '0';
+		goto base_compute;
+	}
 	while (val && i) {
 		buf[i] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"[val % base];
 		i--;
 		val /= base;
 	}
-
+base_compute:
 	switch (base) {
 	case 16:
 		buf[i--] = 'x';
