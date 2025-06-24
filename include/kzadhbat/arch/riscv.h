@@ -1,5 +1,7 @@
 #pragma once
 
+#include <kzadhbat/freestanding.h>
+
 #define BASE_PAGE_SIZE 4096
 
 extern size_t HEAP_START;
@@ -16,7 +18,7 @@ extern size_t BSS_END;
 extern size_t STACK_START;
 extern size_t STACK_END;
 
-[[noreturn]] inline void wfi(void)
+_Noreturn inline void wfi(void)
 {
 	asm volatile("wfi");
 	__builtin_unreachable();

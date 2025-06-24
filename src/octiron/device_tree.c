@@ -157,8 +157,6 @@ size_t dtb_parse_property(struct dtNode *curr, u8 *structures, u8 *strings, size
 	off += sizeof(u32);
 
 	const char *prop_name = state.bump.str_copy(&state.bump, &strings[name_offset]);
-	println("[dtb_parse_property] Parsing property: %s, Length: %d", prop_name, prop_len);
-
 	void *prop_value = state.bump.copy(&state.bump, &structures[off], prop_len);
 	off += ALIGN_UP(prop_len, sizeof(u32));
 
@@ -283,7 +281,7 @@ void dtb_rewrite_property_reg(struct dtProperty *prop, u32 address_cells, u32 si
 			((u128 *)addresses)[i] = READ_BIG_ENDIAN_U128(value + j);
 			break;
 		default:
-			__unreachable();
+			__builtin_unreachable();
 		}
 		j += address_size;
 
@@ -292,13 +290,13 @@ void dtb_rewrite_property_reg(struct dtProperty *prop, u32 address_cells, u32 si
 		case 0:
 			break;
 		case 1:
-			((u32 *)addresses)[i] = READ_BIG_ENDIAN_U32(value + j);
+			((u32 *)sizes)[i] = READ_BIG_ENDIAN_U32(value + j);
 			break;
 		case 2:
-			((u64 *)addresses)[i] = READ_BIG_ENDIAN_U64(value + j);
+			((u64 *)sizes)[i] = READ_BIG_ENDIAN_U64(value + j);
 			break;
 		default:
-			__unreachable();
+			__builtin_unreachable();
 		}
 		j += size_size;
 	}
@@ -463,7 +461,7 @@ void dtb_recursive_print(size_t depth, struct dtNode *node)
 						print("%x", ((u128 *)prop->data.reg.addresses)[i]);
 						break;
 					default:
-						__unreachable();
+						__builtin_unreachable();
 					}
 				}
 				print("]");
@@ -483,7 +481,7 @@ void dtb_recursive_print(size_t depth, struct dtNode *node)
 						print("%x", ((u64 *)prop->data.reg.sizes)[i]);
 						break;
 					default:
-						__unreachable();
+						__builtin_unreachable();
 					}
 				}
 				print("]");
