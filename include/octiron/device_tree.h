@@ -53,6 +53,9 @@ enum dtPropertyType {
 	/// ranges property, describes the address translation between the address space of the bus and the address
 	/// space of the bus node's parent.
 	DTB_PROP_RANGES,
+	/// dma-ranges property, describes DMA address translation between child and parent bus address spaces as 
+	/// (child-address, parent-address, length) triplets
+	DTB_PROP_DMA_RANGES,
 };
 
 struct dtPropRaw {
@@ -134,7 +137,10 @@ struct dtProperty {
 		/// Defines the address translation between the address space of the bus and the address space of the bus
 		/// node's parent.
 		struct dtPropRanges ranges;
-
+		/// Defines DMA address translation between child and parent bus address spaces as (child-address, parent-address,
+		/// length) triplets.
+		struct dtPropRanges dma_ranges;
+		u32 cpu_handle;
 	} data;
 };
 
