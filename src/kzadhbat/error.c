@@ -42,6 +42,8 @@ static const char *grouper_error_str[] = {
 		"Device Tree Blob magic number is invalid. The magic number must be 0xD00DFEED to be valid.",
 	[ERR_DTB_MAPPING_FAILED] =
 		"Failed to map the Device Tree Blob into the kernel's page table.",
+	[ERR_DTB_UNMAPPING_FAILED] =
+		"Failed to unmap the Device Tree Blob from the kernel's page table.",
 	[ERR_DTB_UNCLOSED_ROOT_NODE] =
 		"Device Tree Blob parsing failed because the root node was not closed properly. Ensure that the DTB is well-formed.",
 	[ERR_DTB_NO_NODES] =

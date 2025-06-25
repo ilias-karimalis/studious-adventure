@@ -1,8 +1,11 @@
+#include <kzadhbat/assert.h>
+
 #include <octiron/paging.h>
+#include <octiron/pmm.h>
 
 #define IS_ALIGNED(addr, alignment) (((addr) & ((alignment) - 1)) == 0)
 
-#define SV39_PTE_VALID(pte) ((paddr_t)(pte) & 0x1)
+#define SV39_PTE_VALID(pte) (((paddr_t)(pte) & 0x1) != 0)
 #define SV39_PTE_READABLE(pte) (((sv39_tableEntry)(pte)) & 0x2)
 #define SV39_PTE_WRITABLE(pte) (((sv39_tableEntry)(pte)) & 0x4)
 #define SV39_PTE_EXECUTABLE(pte) (((sv39_tableEntry)(pte)) & 0x8)
@@ -12,6 +15,7 @@
 #define SV39_PTE_DIRTY(pte) (((sv39_tableEntry)(pte)) & 0x80)
 #define SV39_PTE_LEAF(pte) (SV39_PTE_READABLE(pte) || SV39_PTE_WRITABLE(pte) || SV39_PTE_EXECUTABLE(pte))
 #define SV39_PTE_PPN(pte) (((sv39_tableEntry)(pte) >> 10) & 0xFFFFFFFFFFFULL)
+#define SV39_PTE_PPN_TO_PADDR(pte) ((SV39_PTE_PPN((pte))) << 12)
 
 /// The sizes of leaf pages in the SV39 paging system.
 const u64 sv39_pageSizes[] = {
@@ -81,7 +85,7 @@ errval_t sv39_map_small_page(sv39_tableEntry *root, vaddr_t va, paddr_t pa, u64 
 		}
 		l2[vpn[2]] = ((sv39_tableEntry)page >> 2) | SV39_FLAGS_VALID;
 	}
-	l1 = (sv39_tableEntry *)((l2[vpn[2]] >> 10) << 12);
+	l1 = (sv39_tableEntry *)SV39_PTE_PPN_TO_PADDR(l2[vpn[2]]);
 
 	sv39_tableEntry l1_entry = l1[vpn[1]];
 	if (!SV39_PTE_VALID(l1_entry)) {
@@ -119,11 +123,54 @@ errval_t sv39_map_giga_page(sv39_tableEntry *root, vaddr_t va, paddr_t pa, u64 f
 	return ERR_NOT_IMPLEMENTED;
 }
 
-errval_t sv39_unmap(sv39_pageTable *root, vaddr_t va)
+RESULT(paddr_t) sv39_unmap(sv39_pageTable *root, vaddr_t va)
 {
-	(void)root;
-	(void)va;
-	return ERR_NOT_IMPLEMENTED;
+	if (root == NULL) {
+		return RESULT_MAKE_ERR(paddr_t, ERR_NULL_ARGUMENT);
+	}
+
+	if (!IS_ALIGNED(va, sv39_pageSizes[sv39_Page])) {
+		return RESULT_MAKE_ERR(paddr_t, ERR_PAGING_UNALIGNED_ADDRESS);
+	}
+
+	vaddr_t vpn[] = {
+		(va >> 12) & 0x1FF, // Level 0 index
+		(va >> 21) & 0x1FF, // Level 1 index
+		(va >> 30) & 0x1FF // Level 2 index
+	};
+
+	sv39_tableEntry *l2 = (sv39_tableEntry *) root;
+	sv39_tableEntry l2_entry = l2[vpn[2]];
+	if (!SV39_PTE_VALID(l2_entry)) {
+		return RESULT_MAKE_ERR(paddr_t, ERR_PAGING_MAPPING_DOESNT_EXIST);
+	}
+	if (SV39_PTE_LEAF(l2_entry)) {
+		// This is a leaf entry, we can invalidate it and return the physical address
+		paddr_t pa = SV39_PTE_PPN_TO_PADDR(l2_entry);
+		l2[vpn[2]] = 0;
+		return RESULT_MAKE_OK(paddr_t, pa);
+	}
+
+	sv39_tableEntry *l1 = (sv39_tableEntry *)SV39_PTE_PPN_TO_PADDR(l2[vpn[2]]);
+	sv39_tableEntry l1_entry = l1[vpn[1]];
+	if (!SV39_PTE_VALID(l1_entry)) {
+		return RESULT_MAKE_ERR(paddr_t, ERR_PAGING_MAPPING_DOESNT_EXIST);
+	}
+	if (SV39_PTE_LEAF(l1_entry)) {
+		// This is a leaf entry, we can invalidate it and return the physical address
+		paddr_t pa = SV39_PTE_PPN_TO_PADDR(l1_entry);
+		l1[vpn[1]] = 0;
+		return RESULT_MAKE_OK(paddr_t, pa);
+	}
+
+	sv39_tableEntry *l0 = (sv39_tableEntry*) SV39_PTE_PPN_TO_PADDR(l1[vpn[1]]);
+	sv39_tableEntry l0_entry = l0[vpn[0]];
+	if (!SV39_PTE_VALID(l0_entry)) {
+		return RESULT_MAKE_ERR(paddr_t, ERR_PAGING_MAPPING_DOESNT_EXIST);
+	}
+	paddr_t pa = SV39_PTE_PPN_TO_PADDR(l0_entry);
+	l0[vpn[0]] = 0;
+	return RESULT_MAKE_OK(paddr_t, pa);
 }
 
 OPT(paddr_t) sv39_virt_to_phys(sv39_pageTable *root, vaddr_t va)
@@ -168,19 +215,8 @@ OPT(paddr_t) sv39_virt_to_phys(sv39_pageTable *root, vaddr_t va)
 
 void sv39_print_page_table(sv39_tableEntry *root)
 {
+	(void)root;
 	TODO("Implement this function such that it recursively prints out all the subsequent page tables.\n");
-	if (root == NULL) {
-		println("sv39_print_page_table: root is NULL");
-		return;
-	}
-
-	println("SV39 Page Table:");
-	for (int i = 0; i < SV39_TableEntryCount; i++) {
-		sv39_tableEntry entry = root[i];
-		if (SV39_PTE_VALID(entry)) {
-			print("Entry %d: PPN: %x, Flags: %x\n", i, entry >> 10, entry & 0x3FF);
-		}
-	}
 }
 
 void sv39_print_table_entry(sv39_tableEntry pte)

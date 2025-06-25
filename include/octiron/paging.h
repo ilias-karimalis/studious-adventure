@@ -2,9 +2,8 @@
 
 #include <kzadhbat/types/numeric_types.h>
 #include <kzadhbat/types/error.h>
+#include <kzadhbat/types/result.h>
 #include <kzadhbat/types/option.h>
-#include <kzadhbat/assert.h>
-#include <octiron/pmm.h>
 
 // sv39 Paging Implementation
 
@@ -15,6 +14,7 @@
 #define SV39_Kernel_VA_Base 0xFFFFFFF800000000
 
 DEFINE_OPTION_TYPE(paddr_t);
+DEFINE_RESULT_TYPE(paddr_t);
 
 typedef u64 sv39_tableEntry;
 typedef sv39_tableEntry sv39_pageTable[SV39_TableEntryCount];
@@ -45,10 +45,12 @@ SASSERT(sizeof(enum sv39_tableEntryFlags) == sizeof(sv39_tableEntry),
 
 /// Initializes the SV39 paging system and returns a pointer to the root page table.
 sv39_pageTable *sv39_kernel_page_table();
-/// Maps a page into the virtual address space, given a root page table. If any level of the page table does not exist, it is created.
+/// Maps a page into the virtual address space, given a root page table. If any level of the page table does not exist,
+/// it is created.
 errval_t sv39_map(sv39_pageTable *root, vaddr_t va, paddr_t pa, u64 flags, enum sv39_pageType type);
-/// Unmaps a page from the virtual address space, given a root page table.
-errval_t sv39_unmap(sv39_pageTable *root, vaddr_t va);
+/// Unmaps a page from the virtual address space, given a root page table. Returns the physical address of the unmapped
+/// page if successful, or an error if the mapping does not exist.
+RESULT(paddr_t) sv39_unmap(sv39_pageTable *root, vaddr_t va);
 /// Walks the page table translating a va to a pa if the mapping is present.
 OPT(paddr_t) sv39_virt_to_phys(sv39_pageTable *root, vaddr_t va);
 
