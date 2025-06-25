@@ -1,12 +1,16 @@
 #include <octiron/uart_ns16550a.h>
 #include <octiron/pmm.h>
 #include <octiron/paging.h>
-#include <octiron/device_tree.h>
+#include <octiron/devices/device_tree/device_tree.h>
 
 #include <kzadhbat/arch/riscv.h>
 #include <kzadhbat/fmtprint.h>
 #include <kzadhbat/types/error.h>
 #include <kzadhbat/bitmacros.h>
+#include <kzadhbat/assert.h>
+
+__attribute__((aligned(4))) void kmain(void);
+extern void asm_trap_vector(void);
 
 #define EARLY_HEAP_SIZE (128 * BASE_PAGE_SIZE)
 __attribute__((aligned(BASE_PAGE_SIZE))) u8 early_heap[EARLY_HEAP_SIZE] = { 0 };
@@ -33,7 +37,7 @@ void kernel_id_map_range(sv39_pageTable *root, paddr_t start, paddr_t end, u64 f
 	}
 }
 
-size_t kinit(void)
+void kinit(void)
 {
 	errval_t err;
 
@@ -85,14 +89,14 @@ size_t kinit(void)
 		PANIC_LOOP("[kinit] Failed to initialize pmm: %s\n", err_str(err));
 	}
 	print("[kinit] Empty pmm initialized.\n");
-	err = pmm_add_region((u8 *)early_heap , (size_t)EARLY_HEAP_SIZE);
+	err = pmm_add_region(early_heap , EARLY_HEAP_SIZE);
 	if (err_is_fail(err)) {
 		PANIC_LOOP("[kinit] Failed to add initial pmm region: %s\n", err_str(err));
 	}
 	print("[kinit] pmm initialized with the early heap memory (%x bytes).\n", pmm_total_mem());
 
 	// Initialize kernel paging
-	sv39_pageTable *root = (sv39_pageTable*)sv39_kernel_page_table();
+	sv39_pageTable *root = sv39_kernel_page_table();
 	// Setting up kernel identity mappings
 	kernel_id_map_range(root, TEXT_START, TEXT_END, SV39_FLAGS_READ | SV39_FLAGS_EXECUTE);
 	kernel_id_map_range(root, RODATA_START, RODATA_END, SV39_FLAGS_READ);
@@ -134,8 +138,29 @@ size_t kinit(void)
 		ASSERT(OPT_EQ(pa, va), "UART: Identity mapping failed, mapping valid: %d, va: %lx, pa: %lx\n", pa.some,
 		       va, pa.val);
 	}
-	// Returns the value to write to the SATP register
-	return SATP_MODE_SV39_FLAG | SATP_PPN_MASK(root);
+
+	// Set the sstatus register such that we can use the supervisor mode
+	csrw_sstatus((1 << 8) | (1 << 5));
+	// Set the spec register to point to the kernel entry point
+	csrw_sepc((u64) kmain);
+	// Set the mideleg register sych that software, timer and external interrupts are delegated to the supervisor mode
+	csrw_mideleg((1 << 1) | (1 << 5) | (1 << 9));
+	// Set the sie register to match the value of mideleg
+	csrw_sie((1 << 1) | (1 << 5) | (1 << 9));
+	// Set the stvec register to point to the kerne's trap handler
+	csrw_stvec((u64) asm_trap_vector);
+	// Set the satp value to the root of the kernel page table with the SV39 mode enabled
+	csrw_satp(SATP_MODE_SV39_FLAG | SATP_PPN_MASK(root));
+
+	// Setup pmp to map the whole physical address space
+	csrw_pmpaddr0(0);
+	csrw_pmpcfg0(0xF);
+
+	// Fence to ensure that the CPU has taken our SATP register
+	sfence_vma();
+
+	// Return to the kernel entry point (kmain)
+	sret();
 }
 
 /// Note: The value of sepc (address of `kmain`) needs to have it's lower to bits be zeroed
@@ -146,7 +171,7 @@ __attribute__((aligned(4))) void kmain(void)
 
 	// We parse the DTB block at this point because we need to figure out the special memory regions which should
 	// not be included in the Kernel Heap (including the dtb mapping itself).
-	err = dt_parse(dtb_base_addr);
+	err = dt_initialize(dtb_base_addr);
 	if (err_is_fail(err)) {
 		PANIC_LOOP("[kmain] Failed to parse DTB: %s\n", err_str(err));
 	}

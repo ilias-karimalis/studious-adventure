@@ -59,8 +59,8 @@ start:
 	# Machine's trap vector base address is set to `asm_trap_vector`.
 	la		t2, asm_trap_vector
 	csrw	mtvec, t2
-	# Set the return address to get us into supervisor mode
-	la		ra, 2f
+	# If we return from the kint function, something has gone wrong, so we jump to the wait loop.
+	la		ra, 4f
 	# We use mret here so that the mstatus register is properly updated.
 	mret
 2:
