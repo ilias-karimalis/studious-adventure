@@ -8,7 +8,7 @@
 #define RESULT_STR(t) Result_##t
 
 /// Declares and defines a Result<T, E> type.
-#define DEFINE_RESULT(t)              \
+#define DEFINE_RESULT_TYPE(t)              \
 	typedef struct {              \
 		bool some;            \
 		union {               \
@@ -48,13 +48,17 @@
 	} RESULT(PTR(STRUCT(t)))
 
 /// Creates a Result<T, E>::Ok(value) instance.
-#define RESULT_OK(t, value) ((RESULT(t)){ .some = true, .u.val = value })
+#define RESULT_MAKE_OK(t, value) ((RESULT(t)){ .some = true, .u.val = value })
 /// Creates a Result<T, E>::Err(err) instance.
-#define RESULT_ERR(t, error) ((RESULT(t)){ .some = false, .u.err = error })
+#define RESULT_MAKE_ERR(t, error) ((RESULT(t)){ .some = false, .u.err = error })
 /// Returns true of the the Result<T, E> is Ok(_).
 #define RESULT_IS_OK(result) ((result).some)
 /// Returns true if the Result<T, E> is Err(_).
 #define RESULT_IS_ERR(result) (!(result).some)
+/// Gets the value of a Result<T, E> if it is Ok(_), undefined behavior if it is Err(_).
+#define RESULT_OK(result) ((result).u.val)
+/// Gets the error of a Result<T, E> if it is Err(_), undefined behavior if it is Ok(_).
+#define RESULT_ERR(result) ((result).u.err)
 
 #ifndef STRUCT
 /// Used as a work around for macro defined types that contain a struct type
