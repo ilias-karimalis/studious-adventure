@@ -1,12 +1,184 @@
-#include <octiron/device_tree.h>
+#include <octiron/devices/device_tree/device_tree.h>
 #include <octiron/paging.h>
+#include <octiron/collections/array.h>
 
 #include <kzadhbat/bitmacros.h>
 #include <kzadhbat/arch/riscv.h>
+#include <kzadhbat/collections/bump_allocator.h>
 
-/// The parsed state of the Device Tree Blob (DTB).
-/// As of now, I'm assuming that the kernel will only ever need to parse a single DTB.
-struct dt state = { 0 };
+// Struct forward declarations
+// struct dt;
+// struct dtNode;
+// struct dtReservedRegion;
+// struct dtProperty;
+// struct dtPropRaw;
+// struct dtPropStatus;
+// struct dtPropReg;
+
+///////////////////////////////////////////////////////////////////////////////
+// Device Tree Structures
+///////////////////////////////////////////////////////////////////////////////
+
+struct dtReservedRegion {
+	/// The physical address of the reserved region
+	paddr_t address;
+	/// The size of the reserved region in bytes
+	size_t size;
+};
+
+enum dtPropertyType {
+	/// Used to mark properties that have not been fully evaluated yet.
+	DTB_PROP_RAW,
+	/// compatible property, consists of one or more strings that def
+	DTB_PROP_COMPATIBLE,
+	/// model property, specifies the manufacturer's model number of the device
+	DTB_PROP_MODEL,
+	/// phandle property, specifies a numerical identifer for a node that is unique within the devicetree
+	DTB_PROP_PHANDLE,
+	/// status property, describes the operational status of the device
+	DTB_PROP_STATUS,
+	/// #address-cells property, specifies the number of <u32> cells used to encode the address field in a child
+	/// node's reg property
+	DTB_PROP_ADDRESS_CELLS,
+	/// #size-cells property, specifies the number of <u32> cells used to encode the size field in a child node's
+	/// reg property
+	DTB_PROP_SIZE_CELLS,
+	/// dma-coherence property, specifies whether the device is capable of coherent DMA operations
+	DTB_PROP_DMA_COHERENCE,
+	/// device_type property, specifies the type of the device (deprecated)
+	DTB_PROP_DEVICE_TYPE,
+	/// reg property, describes the address of the device’s resources within the address space defined by its parent
+	/// bus
+	DTB_PROP_REG,
+	/// ranges property, describes the address translation between the address space of the bus and the address
+	/// space of the bus node's parent.
+	DTB_PROP_RANGES,
+	/// dma-ranges property, describes DMA address translation between child and parent bus address spaces as
+	/// (child-address, parent-address, length) triplets
+	DTB_PROP_DMA_RANGES,
+};
+
+struct dtPropRaw {
+	/// The length of the property value in bytes
+	u32 value_len;
+	/// The bytestring value of the property
+	void *value;
+};
+
+struct dtPropStatus {
+	enum {
+		/// The device is operational
+		DTB_PROP_STATUS_OK,
+		/// The device is not operational, but can be enabled
+		DTB_PROP_STATUS_DISABLED,
+		/// The device is operational, but should not be used. Typically this is used for devices that are
+		/// controlled by the bootloader or other firmware.
+		DTB_PROP_STATUS_RESERVED,
+		/// The device is not operational and should not be used.
+		DTB_PROP_STATUS_FAIL, ///< The device has failed
+		/// The device is not operational, and there is a specific reason for it not being operational,
+		/// described by the attached string.
+		DTB_PROP_STATUS_FAIL_SSS, ///< The status of the device is unknown
+	} value;
+	/// A string that describes the reason for the device not being operational, if applicable.
+	const char *reason;
+};
+
+struct dtPropReg {
+	/// List of addresses. NULL if address_cells == 0.
+	void* addresses;
+	/// List of sizes corresponding to the addresses. NULL if size_cells == 0.
+	void* sizes;
+	/// The number of (address, size) pairs.
+	u32 n_pairs;
+
+};
+
+struct dtPropRanges {
+	/// List of child bus addresses. NULL if address_cells == 0.
+	void* child_bus_addrs;
+	/// List of parent bus addresses. NULL if address_cells == 0.
+	void* parent_bus_addrs;
+	/// List of region lengths. NULL if size_cells == 0.
+	void* lengths;
+	/// The number of (child-bus-addr, parent-bus-addr, length) triplets.
+	u32 n_trips;
+};
+
+struct dtProperty {
+	/// The name of the property
+	const char *name;
+	/// The next property in the linked list
+	struct dtProperty *next;
+	/// The type of this property
+	enum dtPropertyType type;
+	/// The property type specific data
+	union {
+		/// Raw property data, used for properties that have not been fully evaluated yet.
+		struct dtPropRaw raw;
+		/// List of strings specifying device compatibility for driver selection. NULL terminated.
+		const char** compat;
+		/// Model string specifying the manufacturer and model number of the device.
+		const char *model;
+		/// Numerical identifier unique within the devicetree for node referencing.
+		u32 phandle;
+		/// Status property indicating the operational state of a device.
+		struct dtPropStatus status;
+		/// Number of <u32> cells used to encode the address field in a child node's reg property.
+		u32 address_cells;
+		/// Number of <u32> cells used to encode the size field in a child node's reg property.
+		u32 size_cells;
+		/// Indicates whether the device is capable of coherent DMA operations.
+		bool dma_coherence;
+		/// Specifies the type of the device (deprecated).
+		const char *device_type;
+		/// Defines the address of the device’s resources within the address space defined by its parent bus.
+		struct dtPropReg reg;
+		/// Defines the address translation between the address space of the bus and the address space of the bus
+		/// node's parent.
+		struct dtPropRanges ranges;
+		/// Defines DMA address translation between child and parent bus address spaces as (child-address, parent-address,
+		/// length) triplets.
+		struct dtPropRanges dma_ranges;
+		u32 cpu_handle;
+	} data;
+};
+
+struct dtNode {
+	/// Name of the node
+	const char *name;
+	/// The number of <u32> cells used to encode the address field in this node's reg property
+	u32 address_cells;
+	/// The number of <u32> cells used to encode the size field in this node's reg property
+	u32 size_cells;
+	/// Properties of the node
+	struct dtProperty *properties;
+	/// Pointer to the parent node (NULL for root)
+	struct dtNode *parent;
+	/// Pointer to the first child node (NULL if no children)
+	struct dtNode *children;
+	/// Pointer to the next sibling node (NULL if no siblings)
+	struct dtNode *sibling;
+};
+
+DEFINE_ARRAY_STRUCT(dtReservedRegion);
+DEFINE_ARRAY_STRUCT(dtNode);
+DEFINE_ARRAY_STRUCT(dtProperty);
+struct dt {
+	/// List of reserved memory regions
+	ARRAY(STRUCT(dtReservedRegion)) reserved_memory;
+	/// List of all device tree nodes. nodes[0] is the root node.
+	ARRAY(STRUCT(dtNode)) nodes;
+	/// List of all device tree properties
+	ARRAY(STRUCT(dtProperty)) properties;
+	/// bumpAllocator allocator used to allocate strings
+	struct bumpAllocator bump;
+	/// Pointer to the root node of the device tree
+	struct dtNode *root;
+	/// Indicates whether the device tree has been initialized
+	bool initialized;
+} state = { 0 };
+
 
 struct dtb_header {
 	u32 magic;
@@ -21,134 +193,18 @@ struct dtb_header {
 	u32 size_dt_struct;
 };
 
-#define FDT_BEGIN_NODE ((u32)0x00000001)
-#define FDT_END_NODE ((u32)0x00000002)
-#define FDT_PROP ((u32)0x00000003)
-#define FDT_NOP ((u32)0x00000004)
-#define FDT_END ((u32)0x00000009)
+enum dtb_StructureToken {
+	FDT_BEGIN_NODE = (u32)0x01,
+	FDT_END_NODE = (u32)0x02,
+	FDT_PROP = (u32)0x03,
+	FDT_NOP = (u32)0x04,
+	FDT_END = (u32)0x09,
+};
 
-size_t dtb_parse_node(struct dtNode **curr, u8 *structures, size_t off);
-size_t dtb_parse_property(struct dtNode *curr, u8 *structures, u8 *strings, size_t off);
-errval_t dtb_recursive_property_rewrite(struct dtNode *node);
-void dtb_print_tree(void);
+///////////////////////////////////////////////////////////////////////////////
+// Device Tree Helper Functions
+///////////////////////////////////////////////////////////////////////////////
 
-errval_t dt_parse(paddr_t dtb_base_addr)
-{
-	println("[dt_parse] Parsing DTB at address: %x", dtb_base_addr);
-
-	// Map the DTB base address to the kernel's page table.
-	sv39_pageTable *root = sv39_kernel_page_table();
-	paddr_t aligned_base = ALIGN_DOWN(dtb_base_addr, BASE_PAGE_SIZE);
-	errval_t err = sv39_map(root, aligned_base, aligned_base, SV39_FLAGS_READ, sv39_Page);
-	if (err_is_fail(err)) {
-		return err_push(err, ERR_DTB_MAPPING_FAILED);
-	}
-
-	// The dtb header integers are all stored in big-endian format, and with our system being little-endian,
-	// we need to ensure that we read them correctly.
-	struct dtb_header *header = (struct dtb_header *)dtb_base_addr;
-
-	// Check if the dtb header is valid by checking the magic number
-	if (0x0D00DFEED != ENDIANNESS_FLIP_U32(header->magic)) {
-		return ERR_DTB_MAGIC_NUMBER;
-	}
-
-	// Given the length of the DTB, we may need to map more than one page into the kernel's vspace
-	size_t dtb_size = ENDIANNESS_FLIP_U32(header->totalsize);
-	for (paddr_t pa = aligned_base + BASE_PAGE_SIZE; pa < dtb_base_addr + dtb_size; pa += BASE_PAGE_SIZE) {
-		err = sv39_map(root, pa, pa, SV39_FLAGS_READ, sv39_Page);
-		if (err_is_fail(err)) {
-			return err_push(err, ERR_DTB_MAPPING_FAILED);
-		}
-	}
-
-	// Initialize the dt structure
-	state.reserved_memory = ARRAY_INIT(STRUCT(dtReservedRegion));
-	state.nodes = ARRAY_INIT(STRUCT(dtNode));
-	state.properties = ARRAY_INIT(STRUCT(dtProperty));
-
-	// Allocate memory for the bumpAllocator allocator, which we will use to allocate strings and other device
-	// tree structures.
-	u8 *allocator_buf = NULL;
-	err = pmm_alloc(2 * BASE_PAGE_SIZE, &allocator_buf);
-	if (err_is_fail(err))
-		return err;
-	bump_init(&state.bump, allocator_buf, 2 * BASE_PAGE_SIZE);
-
-	// Parse the Memory Reservation Block
-	u64 *mem_rsvmap = (u64 *)(dtb_base_addr + ENDIANNESS_FLIP_U32(header->off_mem_rsvmap));
-	while (mem_rsvmap[0] != 0 && mem_rsvmap[1] != 0) {
-		struct dtReservedRegion rr;
-		rr.address = ENDIANNESS_FLIP_U64(mem_rsvmap[0]);
-		rr.size = ENDIANNESS_FLIP_U64(mem_rsvmap[1]);
-		ARRAY_PUSH(state.reserved_memory, rr);
-	}
-
-	// Parse the structure and string blocks.
-	u8 *structures = (u8 *)(dtb_base_addr + ENDIANNESS_FLIP_U32(header->off_dt_struct));
-	u8 *strings = (u8 *)(dtb_base_addr + ENDIANNESS_FLIP_U32(header->off_dt_strings));
-
-	struct dtNode *root_node = NULL;
-	size_t off = 0;
-	size_t depth = 0;
-
-	struct dtNode *curr = root_node;
-	for (;;) {
-		ASSERT(off % 4 == 0, "Accesses must be 4 bytes aligned.");
-		u32 token = READ_BIG_ENDIAN_U32(structures + off);
-		off += sizeof(u32);
-
-		switch (token) {
-		case FDT_BEGIN_NODE:
-			off = dtb_parse_node(&curr, structures, off);
-			if (depth == 0 && curr->name[0] == '\0') {
-				// We just parsed the root node, if it's not named we set it to "/"
-				curr->name = "/";
-			}
-			depth++;
-			break;
-
-		case FDT_END_NODE:
-			curr = curr->parent;
-			depth--;
-			break;
-
-		case FDT_PROP:
-			off = dtb_parse_property(curr, structures, strings, off);
-			break;
-
-		case FDT_NOP:
-			break;
-
-		case FDT_END:
-			if (curr != NULL) {
-				PANIC_LOOP("FDT_END token found, but current node is not the root node. Depth: %d",
-					   depth);
-			}
-			goto dtb_second_pass;
-		default:
-			PANIC_LOOP("Unknown structure type: %x", token);
-		}
-	}
-
-dtb_second_pass:
-	// The first allocated node is the root node, so we can set it as the root of the device tree.
-	if (ARRAY_SIZE(state.nodes) == 0) {
-		return ERR_DTB_NO_NODES;
-	}
-	state.root = &state.nodes.data[0];
-
-	// Now that we have parsed the device tree, we can rewrite properties as needed.
-	state.root->address_cells = 2;
-	state.root->size_cells = 1;
-	err = dtb_recursive_property_rewrite(state.root);
-	if (err_is_fail(err))
-		return err_push(err, ERR_DTB_REWRITE_FAILED);
-
-	dtb_print_tree();
-	println("bump free memory: %x bytes", state.bump.size - state.bump.index);
-	return ERR_OK;
-}
 
 size_t dtb_parse_property(struct dtNode *curr, u8 *structures, u8 *strings, size_t off)
 {
@@ -652,4 +708,149 @@ void dtb_print_tree(void)
 
 	// Recursively print the device tree structure
 	dtb_recursive_print(0, &state.nodes.data[0]);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Device tree API
+///////////////////////////////////////////////////////////////////////////////
+
+errval_t dt_initialize(paddr_t dtb_base_addr)
+{
+	println("[dt_parse] Parsing DTB at address: %x", dtb_base_addr);
+
+	// Map the DTB base address to the kernel's page table.
+	sv39_pageTable *root = sv39_kernel_page_table();
+	paddr_t aligned_base = ALIGN_DOWN(dtb_base_addr, BASE_PAGE_SIZE);
+	errval_t err = sv39_map(root, aligned_base, aligned_base, SV39_FLAGS_READ, sv39_Page);
+	if (err_is_fail(err)) {
+		return err_push(err, ERR_DTB_MAPPING_FAILED);
+	}
+
+	// The dtb header integers are all stored in big-endian format, and with our system being little-endian,
+	// we need to ensure that we read them correctly.
+	struct dtb_header *header = (struct dtb_header *)dtb_base_addr;
+
+	// Check if the dtb header is valid by checking the magic number
+	if (0x0D00DFEED != ENDIANNESS_FLIP_U32(header->magic)) {
+		return ERR_DTB_MAGIC_NUMBER;
+	}
+
+	// Given the length of the DTB, we may need to map more than one page into the kernel's vspace
+	size_t dtb_size = ENDIANNESS_FLIP_U32(header->totalsize);
+	for (paddr_t pa = aligned_base + BASE_PAGE_SIZE; pa < dtb_base_addr + dtb_size; pa += BASE_PAGE_SIZE) {
+		err = sv39_map(root, pa, pa, SV39_FLAGS_READ, sv39_Page);
+		if (err_is_fail(err)) {
+			return err_push(err, ERR_DTB_MAPPING_FAILED);
+		}
+	}
+
+	// Initialize the dt structure
+	state.reserved_memory = ARRAY_INIT(STRUCT(dtReservedRegion));
+	state.nodes = ARRAY_INIT(STRUCT(dtNode));
+	state.properties = ARRAY_INIT(STRUCT(dtProperty));
+
+	// Allocate memory for the bumpAllocator allocator, which we will use to allocate strings and other device
+	// tree structures.
+	u8 *allocator_buf = NULL;
+	err = pmm_alloc(2 * BASE_PAGE_SIZE, &allocator_buf);
+	if (err_is_fail(err))
+		return err;
+	bump_init(&state.bump, allocator_buf, 2 * BASE_PAGE_SIZE);
+
+	// Parse the Memory Reservation Block
+	u64 *mem_rsvmap = (u64 *)(dtb_base_addr + ENDIANNESS_FLIP_U32(header->off_mem_rsvmap));
+	while (mem_rsvmap[0] != 0 && mem_rsvmap[1] != 0) {
+		struct dtReservedRegion rr;
+		rr.address = ENDIANNESS_FLIP_U64(mem_rsvmap[0]);
+		rr.size = ENDIANNESS_FLIP_U64(mem_rsvmap[1]);
+		ARRAY_PUSH(state.reserved_memory, rr);
+	}
+
+	// Parse the structure and string blocks.
+	u8 *structures = (u8 *)(dtb_base_addr + ENDIANNESS_FLIP_U32(header->off_dt_struct));
+	u8 *strings = (u8 *)(dtb_base_addr + ENDIANNESS_FLIP_U32(header->off_dt_strings));
+
+	struct dtNode *root_node = NULL;
+	size_t off = 0;
+	size_t depth = 0;
+
+	struct dtNode *curr = root_node;
+	for (;;) {
+		ASSERT(off % 4 == 0, "Accesses must be 4 bytes aligned.");
+		u32 token = READ_BIG_ENDIAN_U32(structures + off);
+		off += sizeof(u32);
+
+		switch (token) {
+		case FDT_BEGIN_NODE:
+			off = dtb_parse_node(&curr, structures, off);
+			if (depth == 0 && curr->name[0] == '\0') {
+				// We just parsed the root node, if it's not named we set it to "/"
+				curr->name = "/";
+			}
+			depth++;
+			break;
+
+		case FDT_END_NODE:
+			curr = curr->parent;
+			depth--;
+			break;
+
+		case FDT_PROP:
+			off = dtb_parse_property(curr, structures, strings, off);
+			break;
+
+		case FDT_NOP:
+			break;
+
+		case FDT_END:
+			if (curr != NULL) {
+				PANIC_LOOP("FDT_END token found, but current node is not the root node. Depth: %d",
+					   depth);
+			}
+			goto dtb_rewrite_pass;
+		default:
+			PANIC_LOOP("Unknown structure type: %x", token);
+		}
+	}
+
+dtb_rewrite_pass:
+	// The first allocated node is the root node, so we can set it as the root of the device tree.
+	if (ARRAY_SIZE(state.nodes) == 0) {
+		return ERR_DTB_NO_NODES;
+	}
+	state.root = &state.nodes.data[0];
+
+	// Now that we have parsed the device tree, we can rewrite properties as needed.
+	state.root->address_cells = 2;
+	state.root->size_cells = 1;
+	err = dtb_recursive_property_rewrite(state.root);
+	if (err_is_fail(err))
+		return err_push(err, ERR_DTB_REWRITE_FAILED);
+
+	dtb_print_tree();
+	println("bump free memory: %x bytes", state.bump.size - state.bump.index);
+
+	// Unmap the DTB pages from the kernel's page table.
+	for (paddr_t pa = aligned_base; pa < dtb_base_addr + dtb_size; pa += BASE_PAGE_SIZE) {
+		RESULT(paddr_t) res = sv39_unmap(root, pa);
+		if (RESULT_IS_ERR(res)) {
+			return err_push(RESULT_ERR(res), ERR_DTB_UNMAPPING_FAILED);
+		}
+	}
+
+	return ERR_OK;
+}
+
+bool dt_is_initialized(void)
+{
+	return state.initialized;
+}
+
+struct dtNode *dt_lookup_node(const char *path)
+{
+	(void) path;
+	// Walk through the path, starting from the root node.
+	// struct dtNode *curr = state.root;
+	return NULL; // Placeholder for the actual implementation
+
 }
