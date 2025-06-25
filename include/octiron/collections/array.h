@@ -2,6 +2,8 @@
 #pragma once
 
 #include <kzadhbat/libc/string.h>
+#include <kzadhbat/assert.h>
+
 #include <octiron/pmm.h>
 
 /// The Array<T> type
